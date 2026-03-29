@@ -20,8 +20,8 @@ export default function UserDashboard() {
 
     async function load() {
       // Upsert user on first visit
-      const { data: userData } = await supabase
-        .from('users')
+      const { data: userData } = await (supabase
+        .from('users') as any)
         .upsert({ wallet_address: wallet }, { onConflict: 'wallet_address' })
         .select()
         .single()
@@ -29,8 +29,8 @@ export default function UserDashboard() {
 
       // Get rewards
       if (userData) {
-        const { data: rewardData } = await supabase
-          .from('rewards')
+        const { data: rewardData } = await (supabase
+          .from('rewards') as any)
           .select('*')
           .eq('user_id', userData.id)
           .order('created_at', { ascending: false })
@@ -39,8 +39,8 @@ export default function UserDashboard() {
       }
 
       // Get active missions
-      const { data: missionData } = await supabase
-        .from('missions')
+      const { data: missionData } = await (supabase
+        .from('missions') as any)
         .select('*')
         .eq('status', 'active')
         .order('deadline', { ascending: true })
