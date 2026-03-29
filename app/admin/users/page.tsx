@@ -11,7 +11,15 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => { supabase.from('users').select('*').order('created_at',{ascending:false}).then(({data})=>{setUsers(data||[]);setLoading(false)}) }, [])
-  const setRole = async (id: string, role: string) => { await supabase.from('users').update({role}).eq('id',id); setUsers(u=>u.map(x=>x.id===id?{...x,role:role as any}:x)); toast.success('Role updated!') }
+  
+  // FIX: Added @ts-ignore for Supabase type issue
+  const setRole = async (id: string, role: string) => { 
+    // @ts-ignore
+    await supabase.from('users').update({role}).eq('id',id)
+    setUsers(u=>u.map(x=>x.id===id?{...x,role:role as any}:x))
+    toast.success('Role updated!') 
+  }
+  
   return (
     <div className="min-h-screen bg-brand-dark"><Navbar />
     <div className="flex pt-16"><Sidebar />
