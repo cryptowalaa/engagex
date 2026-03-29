@@ -30,9 +30,8 @@ export function useUser() {
       if (error && error.code === 'PGRST116') {
         // User doesn't exist — create one
         const role = walletAddress === APP_CONFIG.adminWallet ? 'admin' : 'user'
-        // @ts-ignore
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
+        const { data: newUser, error: createError } = await (supabase
+          .from('users') as any)
           .insert({
             wallet_address: walletAddress,
             role,
@@ -55,9 +54,8 @@ export function useUser() {
 
   async function updateUser(updates: Partial<User>) {
     if (!user) return
-    // @ts-ignore
-    const { data, error } = await supabase
-      .from('users')
+    const { data, error } = await (supabase
+      .from('users') as any)
       .update(updates)
       .eq('id', user.id)
       .select()
