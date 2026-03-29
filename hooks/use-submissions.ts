@@ -28,9 +28,8 @@ export function useSubmissions(missionId?: string, creatorId?: string) {
   }
 
   async function createSubmission(submission: Partial<Submission>) {
-    // @ts-ignore
-    const { data, error } = await supabase
-      .from('submissions')
+    const { data, error } = await (supabase
+      .from('submissions') as any)
       .insert(submission)
       .select()
       .single()
@@ -39,9 +38,8 @@ export function useSubmissions(missionId?: string, creatorId?: string) {
   }
 
   async function updateSubmission(id: string, updates: Partial<Submission>) {
-    // @ts-ignore
-    const { data, error } = await supabase
-      .from('submissions')
+    const { data, error } = await (supabase
+      .from('submissions') as any)
       .update(updates)
       .eq('id', id)
       .select()
