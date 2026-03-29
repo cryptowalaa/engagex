@@ -28,15 +28,21 @@ export default function CreateMission() {
       return toast.error('Fill all required fields')
     setLoading(true)
     try {
+      // @ts-ignore
       const { data: user } = await supabase
         .from('users')
-        // @ts-ignore
         .upsert({ wallet_address: publicKey.toBase58(), role: 'brand' }, { onConflict: 'wallet_address' })
         .select().single()
       
+      if (!user) {
+        toast.error('Failed to create user')
+        setLoading(false)
+        return
+      }
+      
       // @ts-ignore
       const { error } = await supabase.from('missions').insert({
-        brand_id: user?.id,
+        brand_id: user.id,
         title: form.title, description: form.description,
         requirements: form.requirements,
         reward_pool: parseFloat(form.reward_pool),
