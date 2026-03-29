@@ -9,15 +9,15 @@ import toast from 'react-hot-toast'
 export default function AdminMissions() {
   const { missions, loading, refetch } = useMissions()
   
-  // @ts-ignore - Supabase type issue
   const approve = async (id: string) => { 
+    // @ts-ignore - Supabase type issue
     await supabase.from('missions').update({ status: 'active' }).eq('id', id)
     refetch()
     toast.success('Approved!') 
   }
   
-  // @ts-ignore - Supabase type issue
   const reject = async (id: string) => { 
+    // @ts-ignore - Supabase type issue
     await supabase.from('missions').update({ status: 'cancelled' }).eq('id', id)
     refetch()
     toast.success('Rejected') 
