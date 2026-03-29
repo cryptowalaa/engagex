@@ -9,11 +9,11 @@ import toast from 'react-hot-toast'
 export default function AdminMissions() {
   const { missions, loading, refetch } = useMissions()
   
-  // FIX: Use .eq() before .update() and add proper typing
+  // FIX: Type assertion on the entire supabase chain
   const approve = async (id: string) => { 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('missions')
-      .update({ status: 'active' as const })
+      .update({ status: 'active' })
       .eq('id', id)
     
     if (error) {
@@ -25,9 +25,9 @@ export default function AdminMissions() {
   }
   
   const reject = async (id: string) => { 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('missions')
-      .update({ status: 'cancelled' as const })
+      .update({ status: 'cancelled' })
       .eq('id', id)
     
     if (error) {
