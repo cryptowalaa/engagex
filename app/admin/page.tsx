@@ -34,15 +34,15 @@ export default function AdminDashboard() {
     load()
   }, [isAdmin])
 
-  // @ts-ignore - Supabase type issue
   const approveMission = async (id: string) => { 
+    // @ts-ignore
     await supabase.from('missions').update({status:'active'}).eq('id',id)
     setPendingMissions(p=>p.filter(m=>m.id!==id))
     toast.success('Approved!') 
   }
 
-  // @ts-ignore - Supabase type issue
   const rejectMission = async (id: string) => { 
+    // @ts-ignore
     await supabase.from('missions').update({status:'cancelled'}).eq('id',id)
     setPendingMissions(p=>p.filter(m=>m.id!==id))
     toast.success('Rejected') 
