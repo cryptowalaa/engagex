@@ -16,12 +16,14 @@ export const SolanaWalletProvider: FC<Props> = ({ children }) => {
   const wallets = useMemo(() => getWallets(), [])
 
   return (
-    <ConnectionProvider endpoint={SOLANA_RPC_ENDPOINT}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <>
+      <ConnectionProvider endpoint={SOLANA_RPC_ENDPOINT} children={undefined}>
+        <WalletProvider wallets={wallets} autoConnect children={undefined}>
+          <WalletModalProvider>
+            {children}
+          </WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </>
   )
 }
