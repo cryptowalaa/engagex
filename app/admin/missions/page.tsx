@@ -8,8 +8,36 @@ import toast from 'react-hot-toast'
 
 export default function AdminMissions() {
   const { missions, loading, refetch } = useMissions()
-  const approve = async (id: string) => { await supabase.from('missions').update({ status: 'active' } as any).eq('id', id); refetch(); toast.success('Approved!') }
-  const reject = async (id: string) => { await supabase.from('missions').update({ status: 'cancelled' } as any).eq('id', id); refetch(); toast.success('Rejected') }
+  
+  // FIX: Use .eq() before .update() and add proper typing
+  const approve = async (id: string) => { 
+    const { error } = await supabase
+      .from('missions')
+      .update({ status: 'active' as const })
+      .eq('id', id)
+    
+    if (error) {
+      toast.error('Failed to approve')
+      return
+    }
+    refetch()
+    toast.success('Approved!') 
+  }
+  
+  const reject = async (id: string) => { 
+    const { error } = await supabase
+      .from('missions')
+      .update({ status: 'cancelled' as const })
+      .eq('id', id)
+    
+    if (error) {
+      toast.error('Failed to reject')
+      return
+    }
+    refetch()
+    toast.success('Rejected') 
+  }
+  
   return (
     <div className="min-h-screen bg-brand-dark"><Navbar />
     <div className="flex pt-16"><Sidebar />
