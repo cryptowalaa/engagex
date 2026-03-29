@@ -39,16 +39,18 @@ export default function CreateMission() {
         return
       }
       
-      const { error } = await supabase.from('missions').insert({
-        brand_id: user.id,
-        title: form.title, description: form.description,
-        requirements: form.requirements,
-        reward_pool: parseFloat(form.reward_pool),
-        currency: form.currency,
-        deadline: new Date(form.deadline).toISOString(),
-        max_winners: parseInt(form.max_winners),
-        category: form.category, status: 'draft',
-      })
+      const { error } = await (supabase
+        .from('missions') as any)
+        .insert({
+          brand_id: user.id,
+          title: form.title, description: form.description,
+          requirements: form.requirements,
+          reward_pool: parseFloat(form.reward_pool),
+          currency: form.currency,
+          deadline: new Date(form.deadline).toISOString(),
+          max_winners: parseInt(form.max_winners),
+          category: form.category, status: 'draft',
+        })
       if (error) throw error
       toast.success('Mission created! Waiting for admin approval 🎉')
       router.push('/brand/missions')
