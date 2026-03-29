@@ -4,7 +4,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { supabase } from '@/lib/supabase/client'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Navbar } from '@/components/layout/navbar'
-import { Shield, Users, Target, FileText, CheckCircle, XCircle } from 'lucide-react'
+import { Shield, Users, Target, FileText } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import toast from 'react-hot-toast'
 import type { Mission, User } from '@/types/database'
@@ -34,17 +34,15 @@ export default function AdminDashboard() {
     load()
   }, [isAdmin])
 
-  // FIX: Added @ts-ignore for Supabase type issue
+  // @ts-ignore - Supabase type issue
   const approveMission = async (id: string) => { 
-    // @ts-ignore
     await supabase.from('missions').update({status:'active'}).eq('id',id)
     setPendingMissions(p=>p.filter(m=>m.id!==id))
     toast.success('Approved!') 
   }
-  
-  // FIX: Added @ts-ignore for Supabase type issue
+
+  // @ts-ignore - Supabase type issue
   const rejectMission = async (id: string) => { 
-    // @ts-ignore
     await supabase.from('missions').update({status:'cancelled'}).eq('id',id)
     setPendingMissions(p=>p.filter(m=>m.id!==id))
     toast.success('Rejected') 
