@@ -28,7 +28,7 @@ export function useSubmissions(missionId?: string, creatorId?: string) {
   }
 
   async function createSubmission(submission: Partial<Submission>) {
-    // @ts-ignore - Supabase type issue
+    // @ts-ignore
     const { data, error } = await supabase
       .from('submissions')
       .insert(submission)
@@ -39,7 +39,7 @@ export function useSubmissions(missionId?: string, creatorId?: string) {
   }
 
   async function updateSubmission(id: string, updates: Partial<Submission>) {
-    // @ts-ignore - Supabase type issue
+    // @ts-ignore
     const { data, error } = await supabase
       .from('submissions')
       .update(updates)
