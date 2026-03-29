@@ -12,8 +12,8 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true)
   useEffect(() => { supabase.from('users').select('*').order('created_at',{ascending:false}).then(({data})=>{setUsers(data||[]);setLoading(false)}) }, [])
   
-  // @ts-ignore - Supabase type issue
   const setRole = async (id: string, role: string) => { 
+    // @ts-ignore
     await supabase.from('users').update({role}).eq('id',id)
     setUsers(u=>u.map(x=>x.id===id?{...x,role:role as any}:x))
     toast.success('Role updated!') 
