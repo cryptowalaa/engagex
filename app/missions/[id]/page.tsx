@@ -22,18 +22,18 @@ export default function MissionDetailPage() {
   useEffect(() => {
     if (!id) return
     async function load() {
-      const { data: m } = await supabase.from('missions').select('*').eq('id', id).single()
+      const { data: m } = await (supabase.from('missions') as any).select('*').eq('id', id).single()
       setMission(m)
-      const { data: subs } = await supabase
-        .from('submissions')
+      const { data: subs } = await (supabase
+        .from('submissions') as any)
         .select('*, creator:users(id, username, wallet_address)')
         .eq('mission_id', id)
         .order('score', { ascending: false })
       setSubmissions(subs || [])
       if (publicKey) {
-        const { data: u } = await supabase.from('users').select('id').eq('wallet_address', publicKey.toBase58()).single()
+        const { data: u } = await (supabase.from('users') as any).select('id').eq('wallet_address', publicKey.toBase58()).single()
         if (u) {
-          const { data: mine } = await supabase.from('submissions').select('id').eq('mission_id', id).eq('creator_id', u.id).single()
+          const { data: mine } = await (supabase.from('submissions') as any).select('id').eq('mission_id', id).eq('creator_id', u.id).single()
           setHasSubmitted(!!mine)
         }
       }
