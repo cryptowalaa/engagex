@@ -28,10 +28,10 @@ export default function CreateMission() {
       return toast.error('Fill all required fields')
     setLoading(true)
     try {
-      const { data: user } = await supabase
-        .from('users')
+      const { data: user } = await (supabase
+        .from('users') as any)
         .upsert({ wallet_address: publicKey.toBase58(), role: 'brand' }, { onConflict: 'wallet_address' })
-        .select().single() as { data: { id: string } | null }
+        .select().single()
       
       if (!user) {
         toast.error('Failed to create user')
