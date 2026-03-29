@@ -28,13 +28,35 @@ export default function CreateMission() {
       return toast.error('Fill all required fields')
     setLoading(true)
     try {
-      const { data: user } = await (supabase
+      // First try to find existing user
+      let { data: user, error: userError } = await (supabase
         .from('users') as any)
-        .upsert({ wallet_address: publicKey.toBase58(), role: 'brand' }, { onConflict: 'wallet_address' })
-        .select().single()
-      
-      if (!user) {
-        toast.error('Failed to create user')
+        .select('*')
+        .eq('wallet_address', publicKey.toBase58())
+        .single()
+
+      // If user doesn't exist, create one
+      if (!user || userError) {
+        const { data: newUser, error: createError } = await (supabase
+          .from('users') as any)
+          .insert({
+            wallet_address: publicKey.toBase58(),
+            role: 'brand',
+            username: `brand_${publicKey.toBase58().slice(0, 6)}`
+          })
+          .select()
+          .single()
+        
+        if (createError) {
+          toast.error('Failed to create user: ' + createError.message)
+          setLoading(false)
+          return
+        }
+        user = newUser
+      }
+
+      if (!user || !user.id) {
+        toast.error('Failed to get user')
         setLoading(false)
         return
       }
