@@ -30,6 +30,7 @@ export function useUser() {
       if (error && error.code === 'PGRST116') {
         // User doesn't exist — create one
         const role = walletAddress === APP_CONFIG.adminWallet ? 'admin' : 'user'
+        // @ts-ignore - Supabase type issue
         const { data: newUser, error: createError } = await supabase
           .from('users')
           .insert({
@@ -54,6 +55,7 @@ export function useUser() {
 
   async function updateUser(updates: Partial<User>) {
     if (!user) return
+    // @ts-ignore - Supabase type issue
     const { data, error } = await supabase
       .from('users')
       .update(updates)
