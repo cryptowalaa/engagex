@@ -11,17 +11,21 @@ interface Props {
   children: ReactNode
 }
 
-export function SolanaWalletProvider({ children }: Props) {
+export function SolanaWalletProvider({ children }: Props): JSX.Element {
   // Auto-detect all injected wallets (Phantom, Backpack, etc.)
   const wallets = useMemo(() => getWallets(), [])
 
   return (
-    <ConnectionProvider endpoint={SOLANA_RPC_ENDPOINT}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <>
+      {/* @ts-ignore - React 18 type compatibility issue with Solana wallet adapter */}
+      <ConnectionProvider endpoint={SOLANA_RPC_ENDPOINT}>
+        {/* @ts-ignore - React 18 type compatibility issue with Solana wallet adapter */}
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>
+            {children}
+          </WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </>
   )
 }
