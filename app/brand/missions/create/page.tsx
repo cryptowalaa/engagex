@@ -28,9 +28,9 @@ export default function CreateMission() {
       return toast.error('Fill all required fields')
     setLoading(true)
     try {
-      // @ts-ignore
       const { data: user } = await supabase
         .from('users')
+        // @ts-ignore
         .upsert({ wallet_address: publicKey.toBase58(), role: 'brand' }, { onConflict: 'wallet_address' })
         .select().single()
       
