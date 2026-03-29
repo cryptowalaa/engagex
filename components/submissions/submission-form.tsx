@@ -20,7 +20,7 @@ export function SubmissionForm({ missionId, onSuccess }: Props) {
     if (!form.content_link) { toast.error('Content link required'); return }
     setLoading(true)
     try {
-      const { error } = await createSubmission({ ...form, mission_id: missionId, creator_id: user.id })
+      const { error } = await createSubmission({ ...form, mission_id: missionId, creator_id: user.id } as any)
       if (error) throw error
       toast.success('Submission sent! 🎉')
       setForm({ content_link: '', platform: 'twitter', description: '' })
