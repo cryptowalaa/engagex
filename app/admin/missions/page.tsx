@@ -10,14 +10,14 @@ export default function AdminMissions() {
   const { missions, loading, refetch } = useMissions()
   
   const approve = async (id: string) => { 
-    // @ts-ignore - Supabase type issue
+    // @ts-ignore
     await supabase.from('missions').update({ status: 'active' }).eq('id', id)
     refetch()
     toast.success('Approved!') 
   }
   
   const reject = async (id: string) => { 
-    // @ts-ignore - Supabase type issue
+    // @ts-ignore
     await supabase.from('missions').update({ status: 'cancelled' }).eq('id', id)
     refetch()
     toast.success('Rejected') 
