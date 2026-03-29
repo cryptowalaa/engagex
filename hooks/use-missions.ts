@@ -31,6 +31,7 @@ export function useMissions(status?: MissionStatus) {
   }
 
   async function createMission(mission: Partial<Mission>) {
+    // @ts-ignore - Supabase type issue
     const { data, error } = await supabase
       .from('missions')
       .insert(mission)
@@ -41,6 +42,7 @@ export function useMissions(status?: MissionStatus) {
   }
 
   async function updateMission(id: string, updates: Partial<Mission>) {
+    // @ts-ignore - Supabase type issue
     const { data, error } = await supabase
       .from('missions')
       .update(updates)
