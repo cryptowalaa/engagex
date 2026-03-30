@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
-import { Trophy, ArrowLeft, Heart, MessageCircle, Share2, Target } from 'lucide-react'
+import { Trophy, ArrowLeft, Heart, MessageCircle, Share2, Target, CheckCircle } from 'lucide-react'
 import { shortenAddress, formatUSDC } from '@/lib/utils/helpers'
 import Link from 'next/link'
 
@@ -37,10 +37,10 @@ export default function MissionLeaderboardPage() {
   async function loadLeaderboard() {
     setLoading(true)
     try {
-      // Load mission details
+      // Load mission details with brand info
       const { data: mData } = await (supabase
         .from('missions') as any)
-        .select('*, brand:users(username, is_verified)')
+        .select('*, brand:users(id, username, is_verified, wallet_address)')
         .eq('id', missionId)
         .single()
 
@@ -120,15 +120,16 @@ export default function MissionLeaderboardPage() {
                 <h1 className="text-3xl font-black text-white mb-2">
                   {mission?.title}
                 </h1>
-                <p className="text-gray-400 flex items-center gap-2">
+                <div className="flex items-center gap-2 text-gray-400">
                   <Target size={16} className="text-brand-green" />
-                  Mission Leaderboard
+                  <span>Mission Leaderboard</span>
                   {mission?.brand?.is_verified && (
-                    <span className="ml-2 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full">
+                    <span className="ml-2 flex items-center gap-1 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full">
+                      <CheckCircle size={12} className="fill-current" />
                       Verified Brand
                     </span>
                   )}
-                </p>
+                </div>
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-400">Reward Pool</p>
@@ -144,9 +145,9 @@ export default function MissionLeaderboardPage() {
             <div className="p-4 border-b border-brand-border bg-brand-purple/5">
               <div className="flex items-center gap-2">
                 <Trophy size={20} className="text-brand-purple" />
-                <h2 className="text-lg font-bold text-white">Top Creators</h2>
+                <h2 className="text-lg font-bold text-white">Top Creators Rankings</h2>
                 <span className="text-xs text-gray-400 ml-auto">
-                  Ranked by engagement score
+                  Ranked by total engagement score
                 </span>
               </div>
             </div>
@@ -225,7 +226,7 @@ export default function MissionLeaderboardPage() {
           {/* Info */}
           <div className="mt-6 p-4 bg-brand-dark border border-brand-border rounded-xl">
             <p className="text-sm text-gray-400">
-              <span className="text-brand-green font-semibold">Note:</span> This leaderboard shows only creator rankings for this mission based on engagement (likes, comments, shares). Engagers earn points on the main leaderboard.
+              <span className="text-brand-green font-semibold">How it works:</span> Creators earn points based on engagement (likes, comments, shares). Top creators win from the 60% reward pool. Engagers earn points on the main leaderboard.
             </p>
           </div>
         </div>
