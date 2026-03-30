@@ -3,15 +3,18 @@ import { Navbar } from '@/components/layout/navbar'
 import { Sidebar } from '@/components/layout/sidebar'
 import { useUser } from '@/hooks/use-user'
 import { useMissions } from '@/hooks/use-missions'
-import { Target, Plus, TrendingUp } from 'lucide-react'
+import { Target, Plus, TrendingUp, CheckCircle } from 'lucide-react'
 import { formatUSDC, timeUntil } from '@/lib/utils/helpers'
 import Link from 'next/link'
 
 export default function BrandDashboard() {
-  const { user } = useUser()
+  const { user, isBrand } = useUser()
   const { missions } = useMissions()
+  
+  // Only show missions for approved brands
   const myMissions = missions.filter(m => m.brand_id === user?.id)
   const totalPool = myMissions.reduce((sum, m) => sum + m.reward_pool, 0)
+
   return (
     <div className="min-h-screen bg-brand-dark">
       <Navbar />
@@ -19,11 +22,20 @@ export default function BrandDashboard() {
         <Sidebar />
         <main className="flex-1 p-6 lg:p-8 space-y-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-black">Brand <span className="text-brand-purple">Dashboard</span></h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-black">Brand <span className="text-brand-purple">Dashboard</span></h1>
+              {user?.is_verified && (
+                <div className="flex items-center gap-1 bg-brand-green/10 border border-brand-green/20 px-3 py-1 rounded-full">
+                  <CheckCircle size={14} className="text-brand-green fill-current" />
+                  <span className="text-brand-green text-xs font-bold">Verified</span>
+                </div>
+              )}
+            </div>
             <Link href="/brand/missions/create" className="flex items-center gap-2 bg-brand-green text-brand-dark font-bold px-5 py-2.5 rounded-xl hover:bg-opacity-90 transition-all text-sm">
               <Plus size={16} /> Create Mission
             </Link>
           </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { label: 'My Missions', value: myMissions.length, color: 'text-brand-purple', icon: Target },
@@ -36,6 +48,7 @@ export default function BrandDashboard() {
               </div>
             ))}
           </div>
+
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">My Missions</h2>
@@ -59,7 +72,15 @@ export default function BrandDashboard() {
                     </div>
                     <h3 className="font-bold text-white mb-1">{m.title}</h3>
                     <p className="text-gray-400 text-sm line-clamp-2 mb-3">{m.description}</p>
-                    <p className="text-xs text-gray-500">{timeUntil(m.deadline)} remaining</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">{timeUntil(m.deadline)} remaining</p>
+                      <Link 
+                        href={`/missions/${m.id}/leaderboard`}
+                        className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-3 py-1 rounded-lg font-medium hover:bg-brand-green/20 transition-all"
+                      >
+                        View Leaderboard
+                      </Link>
+                    </div>
                   </div>
                 ))}
               </div>
