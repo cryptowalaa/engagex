@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
-import { Search, Target, Clock } from 'lucide-react'
+import { Search, Target, Clock, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import type { Mission } from '@/types/database'
 import { timeUntil } from '@/lib/utils/helpers'
@@ -16,7 +16,7 @@ export default function MissionsPage() {
 
   useEffect(() => {
     async function load() {
-      let q = supabase.from('missions').select('*').order('created_at', { ascending: false })
+      let q = (supabase.from('missions') as any).select('*').order('created_at', { ascending: false })
       if (filter !== 'all') q = q.eq('status', filter)
       const { data } = await q
       setMissions(data || [])
@@ -77,16 +77,40 @@ export default function MissionsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map(mission => (
               <Link key={mission.id} href={`/missions/${mission.id}`}>
-                <div className="bg-brand-card border border-brand-border rounded-2xl p-6 h-full card-hover shimmer flex flex-col">
-                  <div className="flex items-start justify-between mb-4">
-                    <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusColor(mission.status)}`}>{mission.status}</span>
-                    <span className="text-brand-green font-black text-lg">{mission.reward_pool} {mission.currency}</span>
+                <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden h-full card-hover shimmer flex flex-col">
+                  {/* FIX: Add Image */}
+                  <div className="h-40 bg-brand-dark relative overflow-hidden">
+                    {mission.image_url ? (
+                      <img 
+                        src={mission.image_url} 
+                        alt={mission.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-600">
+                        <ImageIcon size={48} />
+                      </div>
+                    )}
+                    <div className="absolute top-3 left-3">
+                      <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${statusColor(mission.status)}`}>
+                        {mission.status}
+                      </span>
+                    </div>
                   </div>
-                  <h3 className="font-bold text-white text-lg mb-2 line-clamp-2">{mission.title}</h3>
-                  <p className="text-gray-400 text-sm line-clamp-3 mb-4 flex-1">{mission.description}</p>
-                  <div className="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-brand-border">
-                    <span className="flex items-center gap-1"><Clock size={12} />{timeUntil(mission.deadline)} left</span>
-                    <span className="flex items-center gap-1"><Target size={12} />Max {mission.max_winners} winners</span>
+                  
+                  <div className="p-6 flex-1 flex flex-col">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="font-bold text-white text-lg line-clamp-2 flex-1">{mission.title}</h3>
+                      <span className="text-brand-green font-black text-lg ml-2">{mission.reward_pool} {mission.currency}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm line-clamp-3 mb-4 flex-1">{mission.description}</p>
+                    <div className="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-brand-border">
+                      <span className="flex items-center gap-1"><Clock size={12} />{timeUntil(mission.deadline)} left</span>
+                      <span className="flex items-center gap-1"><Target size={12} />Max {mission.max_winners} winners</span>
+                    </div>
                   </div>
                 </div>
               </Link>
