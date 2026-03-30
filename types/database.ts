@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'creator' | 'brand' | 'admin'
+export type UserRole = 'user' | 'creator' | 'brand' | 'admin' | 'brand_pending'
 export type MissionStatus = 'draft' | 'funded' | 'active' | 'completed' | 'cancelled'
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected' | 'winner'
 export type RewardStatus = 'pending' | 'processing' | 'paid' | 'failed'
@@ -13,10 +13,17 @@ export interface User {
   avatar_url: string | null
   bio: string | null
   twitter_handle: string | null
+  discord_handle: string | null
+  website_url: string | null
+  linkedin_url: string | null
+  telegram_handle: string | null
   total_earned: number
-  total_points: number  // ✅ NEW: Added for engagement points
+  total_points: number
   referral_code: string | null
   referred_by: string | null
+  is_verified: boolean  // ✅ NEW: Verified badge for approved brands
+  brand_status: 'pending' | 'approved' | 'rejected' | null  // ✅ NEW: Brand application status
+  brand_submitted_at: string | null  // ✅ NEW: When brand applied
   created_at: string
   updated_at: string
 }
@@ -64,7 +71,6 @@ export interface Engagement {
   recorded_at: string
 }
 
-// ✅ NEW: UserEngagement interface for tracking user actions
 export interface UserEngagement {
   id: string
   user_id: string
@@ -104,7 +110,6 @@ export interface Database {
       missions: { Row: Mission; Insert: Partial<Mission>; Update: Partial<Mission> }
       submissions: { Row: Submission; Insert: Partial<Submission>; Update: Partial<Submission> }
       engagements: { Row: Engagement; Insert: Partial<Engagement>; Update: Partial<Engagement> }
-      // ✅ NEW: Add user_engagements table
       user_engagements: { 
         Row: UserEngagement; 
         Insert: Partial<UserEngagement>; 
