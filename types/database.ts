@@ -3,6 +3,7 @@ export type MissionStatus = 'draft' | 'funded' | 'active' | 'completed' | 'cance
 export type SubmissionStatus = 'pending' | 'approved' | 'rejected' | 'winner'
 export type RewardStatus = 'pending' | 'processing' | 'paid' | 'failed'
 export type Platform = 'twitter' | 'tiktok' | 'youtube' | 'instagram' | 'other'
+export type EngagementAction = 'like' | 'comment' | 'share' | 'watch'
 
 export interface User {
   id: string
@@ -13,6 +14,7 @@ export interface User {
   bio: string | null
   twitter_handle: string | null
   total_earned: number
+  total_points: number  // ✅ NEW: Added for engagement points
   referral_code: string | null
   referred_by: string | null
   created_at: string
@@ -62,6 +64,17 @@ export interface Engagement {
   recorded_at: string
 }
 
+// ✅ NEW: UserEngagement interface for tracking user actions
+export interface UserEngagement {
+  id: string
+  user_id: string
+  submission_id: string
+  action_type: EngagementAction
+  points: number
+  metadata?: Record<string, any> | null
+  created_at: string
+}
+
 export interface Reward {
   id: string
   user_id: string
@@ -91,6 +104,12 @@ export interface Database {
       missions: { Row: Mission; Insert: Partial<Mission>; Update: Partial<Mission> }
       submissions: { Row: Submission; Insert: Partial<Submission>; Update: Partial<Submission> }
       engagements: { Row: Engagement; Insert: Partial<Engagement>; Update: Partial<Engagement> }
+      // ✅ NEW: Add user_engagements table
+      user_engagements: { 
+        Row: UserEngagement; 
+        Insert: Partial<UserEngagement>; 
+        Update: Partial<UserEngagement> 
+      }
       rewards: { Row: Reward; Insert: Partial<Reward>; Update: Partial<Reward> }
       referrals: { Row: Referral; Insert: Partial<Referral>; Update: Partial<Referral> }
     }
