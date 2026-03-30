@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Navbar } from '@/components/layout/navbar'
-import { Target, Plus } from 'lucide-react'
+import { Target, Plus, ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { MISSION_CATEGORIES } from '@/lib/config'
 
@@ -19,6 +19,7 @@ export default function CreateMission() {
     title: '', description: '', requirements: '',
     reward_pool: '', currency: 'USDC', deadline: '',
     max_winners: '10', category: 'Social Media',
+    image_url: '', // NEW: Image URL field
   })
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
 
@@ -71,7 +72,9 @@ export default function CreateMission() {
           currency: form.currency,
           deadline: new Date(form.deadline).toISOString(),
           max_winners: parseInt(form.max_winners),
-          category: form.category, status: 'draft',
+          category: form.category, 
+          image_url: form.image_url || null, // NEW: Save image URL
+          status: 'draft',
         })
       if (error) throw error
       toast.success('Mission created! Waiting for admin approval 🎉')
@@ -93,6 +96,33 @@ export default function CreateMission() {
             </h1>
             <p className="text-gray-400 mb-8">Launch an attention campaign with a reward pool</p>
             <div className="bg-brand-card border border-brand-border rounded-2xl p-8 space-y-5">
+              
+              {/* NEW: Image URL Field */}
+              <div>
+                <label className="text-sm text-gray-400 font-semibold block mb-2 flex items-center gap-2">
+                  <ImageIcon size={14} /> Mission Image URL
+                </label>
+                <input 
+                  value={form.image_url} 
+                  onChange={e => set('image_url', e.target.value)} 
+                  placeholder="https://example.com/image.jpg" 
+                  className={INPUT} 
+                />
+                {form.image_url && (
+                  <div className="mt-3 p-3 bg-brand-dark rounded-xl border border-brand-border">
+                    <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                    <img 
+                      src={form.image_url} 
+                      alt="Mission preview" 
+                      className="w-full h-32 object-cover rounded-lg"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Mission Title *</label>
                 <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. Twitter Thread Campaign — Jupiter DEX" className={INPUT} />
