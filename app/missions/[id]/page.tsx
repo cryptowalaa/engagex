@@ -7,8 +7,16 @@ import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
 import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, Eye } from 'lucide-react'
-import { timeUntil, timeAgo, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
+import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
+
+// Points configuration
+const ENGAGEMENT_POINTS = {
+  like: 1,
+  comment: 2,
+  share: 3
+}
 
 export default function MissionDetailPage() {
   const params = useParams()
@@ -18,6 +26,8 @@ export default function MissionDetailPage() {
   const [submissions, setSubmissions] = useState<any[]>([])
   const [hasSubmitted, setHasSubmitted] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [userEngagements, setUserEngagements] = useState<Record<string, string[]>>({})
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   useEffect(() => {
     if (!id) return
@@ -25,30 +35,74 @@ export default function MissionDetailPage() {
       const { data: m } = await (supabase.from('missions') as any).select('*').eq('id', id).single()
       setMission(m)
       
-      // FIX: Fetch submissions WITH engagement data
       const { data: subs } = await (supabase
         .from('submissions') as any)
-        .select(`
-          *,
-          creator:users(id, username, wallet_address),
-          engagement:engagements(*)
-        `)
+        .select(`*, creator:users(id, username, wallet_address), engagement:engagements(*)`)
         .eq('mission_id', id)
         .order('score', { ascending: false })
       
       setSubmissions(subs || [])
       
       if (publicKey) {
-        const { data: u } = await (supabase.from('users') as any).select('id').eq('wallet_address', publicKey.toBase58()).single()
+        const { data: u } = await (supabase.from('users') as any).select('*').eq('wallet_address', publicKey.toBase58()).single()
         if (u) {
+          setCurrentUser(u)
           const { data: mine } = await (supabase.from('submissions') as any).select('id').eq('mission_id', id).eq('creator_id', u.id).single()
           setHasSubmitted(!!mine)
+          
+          // Load user's previous engagements
+          const { data: engagements } = await (supabase.from('user_engagements') as any)
+            .select('submission_id, action_type')
+            .eq('user_id', u.id)
+          
+          const engagementMap: Record<string, string[]> = {}
+          engagements?.forEach((e: any) => {
+            if (!engagementMap[e.submission_id]) engagementMap[e.submission_id] = []
+            engagementMap[e.submission_id].push(e.action_type)
+          })
+          setUserEngagements(engagementMap)
         }
       }
       setLoading(false)
     }
     load()
   }, [id, publicKey])
+
+  // Handle user engagement (like/comment/share)
+  const handleEngagement = async (submissionId: string, actionType: 'like' | 'comment' | 'share') => {
+    if (!currentUser) {
+      toast.error('Connect wallet first')
+      return
+    }
+    
+    // Check if already engaged
+    if (userEngagements[submissionId]?.includes(actionType)) {
+      toast.error(`You already ${actionType}d this!`)
+      return
+    }
+
+    try {
+      const points = ENGAGEMENT_POINTS[actionType]
+      
+      // Insert user engagement
+      await (supabase.from('user_engagements') as any).insert({
+        user_id: currentUser.id,
+        submission_id: submissionId,
+        action_type: actionType,
+        points: points
+      })
+
+      // Update local state
+      setUserEngagements(prev => ({
+        ...prev,
+        [submissionId]: [...(prev[submissionId] || []), actionType]
+      }))
+
+      toast.success(`+${points} points! You ${actionType}d the content!`)
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to record engagement')
+    }
+  }
 
   if (loading) return (
     <div className="min-h-screen bg-brand-dark flex items-center justify-center">
@@ -94,44 +148,92 @@ export default function MissionDetailPage() {
                   <h2 className="text-white font-bold mb-4 flex items-center gap-2">
                     <Trophy size={18} className="text-yellow-400" /> Top Submissions
                   </h2>
-                  <div className="space-y-3">
-                    {submissions.slice(0, 10).map((sub, i) => (
-                      <div key={sub.id} className="flex items-center justify-between p-3 bg-brand-dark rounded-xl border border-brand-border">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i===0?'bg-yellow-500 text-black':i===1?'bg-gray-400 text-black':i===2?'bg-orange-500 text-black':'bg-brand-border text-gray-400'}`}>{i+1}</span>
-                          <div>
-                            <p className="text-white text-sm font-medium">{sub.creator?.username || shortenAddress(sub.creator?.wallet_address || '', 4)}</p>
-                            <span className="text-xs text-gray-500">{sub.platform}</span>
+                  <div className="space-y-4">
+                    {submissions.slice(0, 10).map((sub, i) => {
+                      const userActions = userEngagements[sub.id] || []
+                      const hasLiked = userActions.includes('like')
+                      const hasCommented = userActions.includes('comment')
+                      const hasShared = userActions.includes('share')
+                      
+                      return (
+                        <div key={sub.id} className="p-4 bg-brand-dark rounded-xl border border-brand-border">
+                          {/* Creator Info */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${i===0?'bg-yellow-500 text-black':i===1?'bg-gray-400 text-black':i===2?'bg-orange-500 text-black':'bg-brand-border text-gray-400'}`}>{i+1}</span>
+                              <div>
+                                <p className="text-white font-semibold">{sub.creator?.username || shortenAddress(sub.creator?.wallet_address || '', 4)}</p>
+                                <span className="text-xs text-gray-500 capitalize">{sub.platform}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-brand-green font-bold text-lg">{Number(sub.score).toFixed(0)}</span>
+                              <span className="text-xs text-gray-500">pts</span>
+                            </div>
                           </div>
-                        </div>
-                        
-                        {/* FIX: Show engagement metrics */}
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            <span className="flex items-center gap-1" title="Likes ×1">
-                              <Heart size={12} className="text-red-400"/>
-                              {sub.engagement?.likes || 0}
+
+                          {/* Engagement Stats */}
+                          <div className="flex items-center gap-4 text-sm text-gray-400 mb-3 px-2">
+                            <span className="flex items-center gap-1.5">
+                              <Heart size={14} className="text-red-400"/> {sub.engagement?.likes || 0}
                             </span>
-                            <span className="flex items-center gap-1" title="Comments ×3">
-                              <MessageCircle size={12} className="text-blue-400"/>
-                              {sub.engagement?.comments || 0}
+                            <span className="flex items-center gap-1.5">
+                              <MessageCircle size={14} className="text-blue-400"/> {sub.engagement?.comments || 0}
                             </span>
-                            <span className="flex items-center gap-1" title="Shares ×5">
-                              <Share2 size={12} className="text-green-400"/>
-                              {sub.engagement?.shares || 0}
+                            <span className="flex items-center gap-1.5">
+                              <Share2 size={14} className="text-green-400"/> {sub.engagement?.shares || 0}
                             </span>
-                            <span className="flex items-center gap-1" title="Watch Time ×2">
-                              <Eye size={12} className="text-purple-400"/>
-                              {sub.engagement?.watch_time || 0}s
-                            </span>
+                            <a href={sub.content_link} target="_blank" rel="noopener noreferrer" className="ml-auto text-gray-500 hover:text-brand-green transition-colors">
+                              <ExternalLink size={16} />
+                            </a>
                           </div>
-                          <span className="text-brand-green font-bold text-sm min-w-[60px] text-right">{Number(sub.score).toFixed(0)} pts</span>
-                          <a href={sub.content_link} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand-green transition-colors">
-                            <ExternalLink size={14} />
-                          </a>
+
+                          {/* User Engagement Buttons */}
+                          {currentUser && currentUser.id !== sub.creator_id && (
+                            <div className="flex gap-2 pt-3 border-t border-brand-border">
+                              <button 
+                                onClick={() => handleEngagement(sub.id, 'like')}
+                                disabled={hasLiked}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                                  hasLiked 
+                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                                    : 'bg-brand-card border border-brand-border text-gray-300 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400'
+                                }`}
+                              >
+                                <Heart size={16} className={hasLiked ? 'fill-current' : ''} />
+                                {hasLiked ? 'Liked' : 'Like'} (+1)
+                              </button>
+                              
+                              <button 
+                                onClick={() => handleEngagement(sub.id, 'comment')}
+                                disabled={hasCommented}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                                  hasCommented 
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                                    : 'bg-brand-card border border-brand-border text-gray-300 hover:bg-blue-500/10 hover:border-blue-500/30 hover:text-blue-400'
+                                }`}
+                              >
+                                <MessageCircle size={16} />
+                                {hasCommented ? 'Commented' : 'Comment'} (+2)
+                              </button>
+                              
+                              <button 
+                                onClick={() => handleEngagement(sub.id, 'share')}
+                                disabled={hasShared}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                                  hasShared 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                    : 'bg-brand-card border border-brand-border text-gray-300 hover:bg-green-500/10 hover:border-green-500/30 hover:text-green-400'
+                                }`}
+                              >
+                                <Share2 size={16} />
+                                {hasShared ? 'Shared' : 'Share'} (+3)
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
