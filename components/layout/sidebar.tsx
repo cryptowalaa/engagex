@@ -4,10 +4,12 @@ import { usePathname } from 'next/navigation'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { 
   LayoutDashboard, Target, FileText, Trophy, User, 
-  Users, Gift, Shield, Zap, TrendingUp 
+  Users, Gift, Shield, Zap, TrendingUp, Building2, 
+  CheckCircle, Clock
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import { cn } from '@/lib/utils/helpers'
+import { useUser } from '@/hooks/use-user'
 
 const creatorLinks = [
   { href: '/creator', label: 'Dashboard', icon: LayoutDashboard },
@@ -23,6 +25,7 @@ const brandLinks = [
 
 const adminLinks = [
   { href: '/admin', label: 'Admin Dashboard', icon: Shield },
+  { href: '/admin/brands', label: 'Brand Applications', icon: Building2 },  // ✅ NEW
   { href: '/admin/missions', label: 'Manage Missions', icon: Target },
   { href: '/admin/users', label: 'Manage Users', icon: Users },
   { href: '/admin/rewards', label: 'Distribute Rewards', icon: Gift },
@@ -37,7 +40,7 @@ const commonLinks = [
 export function Sidebar() {
   const pathname = usePathname()
   const { publicKey } = useWallet()
-  const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet
+  const { isAdmin, isBrand, isBrandPending, user } = useUser()  // ✅ Use hook instead of direct check
 
   const SidebarLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: any }) => (
     <Link href={href}
@@ -77,10 +80,37 @@ export function Sidebar() {
         </div>
       </div>
 
+      {/* ✅ UPDATED: Brand Section Logic */}
       <div>
         <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider px-3 mb-2">Brand</p>
         <div className="space-y-1">
-          {brandLinks.map(link => <SidebarLink key={link.href} {...link} />)}
+          {isBrand ? (
+            // Approved Brand - Show full dashboard
+            brandLinks.map(link => <SidebarLink key={link.href} {...link} />)
+          ) : isBrandPending ? (
+            // Pending Approval
+            <div className="px-3 py-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <div className="flex items-center gap-2 text-yellow-400 text-sm font-medium">
+                <Clock size={16} />
+                <span>Approval Pending</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Your application is under review</p>
+            </div>
+          ) : (
+            // Not applied yet - Show Apply button
+            <Link 
+              href="/brand/apply"
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+                pathname === '/brand/apply'
+                  ? 'bg-brand-green/10 text-brand-green border border-brand-green/20'
+                  : 'bg-brand-purple/10 text-brand-purple border border-brand-purple/20 hover:bg-brand-purple/20'
+              )}
+            >
+              <Building2 size={16} />
+              Apply as Brand
+            </Link>
+          )}
         </div>
       </div>
 
@@ -90,6 +120,16 @@ export function Sidebar() {
           {commonLinks.map(link => <SidebarLink key={link.href} {...link} />)}
         </div>
       </div>
+
+      {/* ✅ NEW: Show Verified Badge if approved brand */}
+      {isBrand && user?.is_verified && (
+        <div className="px-3 py-2.5 rounded-lg bg-brand-green/10 border border-brand-green/20">
+          <div className="flex items-center gap-2 text-brand-green text-sm font-medium">
+            <CheckCircle size={16} className="fill-current" />
+            <span>Verified Brand</span>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
