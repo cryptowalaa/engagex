@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
-import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, ImageIcon } from 'lucide-react'
+import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, CheckCircle, TrendingUp } from 'lucide-react'
 import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -16,6 +16,13 @@ const ENGAGEMENT_POINTS = {
   like: 1,
   comment: 2,
   share: 3
+}
+
+// Score weights for creator points calculation
+const SCORE_WEIGHTS = {
+  likes: 1,
+  comments: 3,
+  shares: 5
 }
 
 export default function MissionDetailPage() {
@@ -39,14 +46,17 @@ export default function MissionDetailPage() {
   async function loadData() {
     setLoading(true)
     try {
-      // Load mission
-      const { data: m } = await (supabase.from('missions') as any).select('*').eq('id', id).single()
+      // Load mission with brand info including verified status
+      const { data: m } = await (supabase.from('missions') as any)
+        .select('*, brand:users(id, username, wallet_address, is_verified, avatar_url)')
+        .eq('id', id)
+        .single()
       setMission(m)
       
-      // Load submissions
+      // Load submissions with engagement
       const { data: subs } = await (supabase
         .from('submissions') as any)
-        .select(`*, creator:users(id, username, wallet_address), engagement:engagements(*)`)
+        .select(`*, creator:users(id, username, wallet_address, avatar_url), engagement:engagements(*)`)
         .eq('mission_id', id)
         .order('score', { ascending: false })
       
@@ -71,8 +81,6 @@ export default function MissionDetailPage() {
             .select('submission_id, action_type')
             .eq('user_id', u.id)
           
-          console.log('Loaded engagements:', engagements) // DEBUG
-          
           const engagementMap: Record<string, string[]> = {}
           engagements?.forEach((e: any) => {
             if (!engagementMap[e.submission_id]) engagementMap[e.submission_id] = []
@@ -88,10 +96,13 @@ export default function MissionDetailPage() {
     }
   }
 
+  // Calculate creator score based on engagement
+  function calculateCreatorScore(likes: number, comments: number, shares: number) {
+    return (likes * SCORE_WEIGHTS.likes) + (comments * SCORE_WEIGHTS.comments) + (shares * SCORE_WEIGHTS.shares)
+  }
+
   // Handle user engagement (like/comment/share)
   const handleEngagement = async (submissionId: string, actionType: 'like' | 'comment' | 'share', metadata?: any) => {
-    console.log('handleEngagement called:', { submissionId, actionType, currentUser }) // DEBUG
-    
     if (!currentUser) {
       toast.error('Connect wallet first')
       return
@@ -106,16 +117,8 @@ export default function MissionDetailPage() {
     try {
       const points = ENGAGEMENT_POINTS[actionType]
       
-      console.log('Inserting engagement:', { // DEBUG
-        user_id: currentUser.id,
-        submission_id: submissionId,
-        action_type: actionType,
-        points: points,
-        metadata: metadata || null
-      })
-      
       // Insert user engagement
-      const { data: insertData, error: insertError } = await (supabase.from('user_engagements') as any)
+      const { error: insertError } = await (supabase.from('user_engagements') as any)
         .insert({
           user_id: currentUser.id,
           submission_id: submissionId,
@@ -124,14 +127,45 @@ export default function MissionDetailPage() {
           metadata: metadata || null,
           created_at: new Date().toISOString()
         })
-        .select()
 
-      if (insertError) {
-        console.error('Insert error:', insertError)
-        throw insertError
+      if (insertError) throw insertError
+
+      // Update engagement counts in engagements table
+      const submission = submissions.find(s => s.id === submissionId)
+      if (submission) {
+        const currentEngagement = submission.engagement || { likes: 0, comments: 0, shares: 0 }
+        const updates: any = {}
+        
+        if (actionType === 'like') updates.likes = (currentEngagement.likes || 0) + 1
+        if (actionType === 'comment') updates.comments = (currentEngagement.comments || 0) + 1
+        if (actionType === 'share') updates.shares = (currentEngagement.shares || 0) + 1
+        
+        // Calculate new score
+        const newLikes = updates.likes ?? currentEngagement.likes
+        const newComments = updates.comments ?? currentEngagement.comments
+        const newShares = updates.shares ?? currentEngagement.shares
+        const newScore = calculateCreatorScore(newLikes, newComments, newShares)
+        
+        // Update or insert engagement record
+        if (submission.engagement?.id) {
+          await (supabase.from('engagements') as any)
+            .update({ ...updates, score: newScore, updated_at: new Date().toISOString() })
+            .eq('id', submission.engagement.id)
+        } else {
+          await (supabase.from('engagements') as any)
+            .insert({
+              submission_id: submissionId,
+              ...updates,
+              score: newScore,
+              recorded_at: new Date().toISOString()
+            })
+        }
+
+        // Update submission score
+        await (supabase.from('submissions') as any)
+          .update({ score: newScore, updated_at: new Date().toISOString() })
+          .eq('id', submissionId)
       }
-
-      console.log('Insert success:', insertData) // DEBUG
 
       // Update local state immediately
       setUserEngagements(prev => ({
@@ -139,15 +173,13 @@ export default function MissionDetailPage() {
         [submissionId]: [...(prev[submissionId] || []), actionType]
       }))
 
-      // Refresh user data to get updated total_points
-      const { data: updatedUser } = await (supabase.from('users') as any)
-        .select('*')
+      // Refresh submissions to show updated scores
+      await loadData()
+
+      // Update user total_points
+      await (supabase.from('users') as any)
+        .update({ total_points: (currentUser.total_points || 0) + points })
         .eq('id', currentUser.id)
-        .single()
-      
-      if (updatedUser) {
-        setCurrentUser(updatedUser)
-      }
 
       toast.success(`+${points} points! You ${actionType}d the content!`)
     } catch (e: any) {
@@ -195,11 +227,9 @@ export default function MissionDetailPage() {
     const shareUrl = submission.content_link
     const tweetText = `Check out this content on EngageX! 🚀\n\n${shareUrl}\n\n#EngageX #Web3`
 
-    // Open Twitter share
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`
     window.open(twitterUrl, '_blank', 'width=600,height=400')
 
-    // Record engagement
     await handleEngagement(submission.id, 'share', { platform: 'twitter', url: shareUrl })
   }
 
@@ -228,7 +258,7 @@ export default function MissionDetailPage() {
             {/* Main content */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
-                {/* FIX: Add Mission Image */}
+                {/* Mission Image */}
                 {mission.image_url && (
                   <div className="mb-4 h-48 rounded-xl overflow-hidden bg-brand-dark">
                     <img 
@@ -242,6 +272,27 @@ export default function MissionDetailPage() {
                   </div>
                 )}
                 
+                {/* Brand Info with Verified Badge */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple font-bold">
+                    {mission.brand?.username?.[0]?.toUpperCase() || 'B'}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white font-semibold">
+                        {mission.brand?.username || shortenAddress(mission.brand?.wallet_address || '', 4)}
+                      </p>
+                      {mission.brand?.is_verified && (
+                        <span className="flex items-center gap-1 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full">
+                          <CheckCircle size={12} className="fill-current" />
+                          Verified
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">Brand</p>
+                  </div>
+                </div>
+                
                 <div className="flex items-start justify-between mb-4">
                   <span className="text-xs px-3 py-1 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-full">{mission.status}</span>
                   <span className="text-xs text-gray-500">{mission.category}</span>
@@ -254,6 +305,27 @@ export default function MissionDetailPage() {
                     <p className="text-gray-400 text-sm">{mission.requirements}</p>
                   </div>
                 )}
+              </div>
+
+              {/* Leaderboard Link */}
+              <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
+                <Link 
+                  href={`/missions/${id}/leaderboard`}
+                  className="flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-brand-purple/10 flex items-center justify-center">
+                      <TrendingUp size={24} className="text-brand-purple" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-bold group-hover:text-brand-purple transition-colors">View Leaderboard</h3>
+                      <p className="text-sm text-gray-400">See top creators rankings</p>
+                    </div>
+                  </div>
+                  <div className="text-brand-purple">
+                    <ExternalLink size={20} />
+                  </div>
+                </Link>
               </div>
 
               {submissions.length > 0 && (
@@ -280,7 +352,7 @@ export default function MissionDetailPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-brand-green font-bold text-lg">{Number(sub.score).toFixed(0)}</span>
+                              <span className="text-brand-green font-bold text-lg">{Number(sub.score || 0).toFixed(0)}</span>
                               <span className="text-xs text-gray-500">pts</span>
                             </div>
                           </div>
@@ -301,14 +373,11 @@ export default function MissionDetailPage() {
                             </a>
                           </div>
 
-                          {/* User Engagement Buttons - FIX: Better click handling */}
+                          {/* User Engagement Buttons */}
                           {currentUser && currentUser.id !== sub.creator_id && (
                             <div className="flex gap-2 pt-3 border-t border-brand-border">
                               <button 
-                                onClick={() => {
-                                  console.log('Like clicked for:', sub.id)
-                                  handleEngagement(sub.id, 'like')
-                                }}
+                                onClick={() => handleEngagement(sub.id, 'like')}
                                 disabled={hasLiked}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                                   hasLiked 
@@ -321,10 +390,7 @@ export default function MissionDetailPage() {
                               </button>
                               
                               <button 
-                                onClick={() => {
-                                  console.log('Comment clicked for:', sub.id)
-                                  openCommentModal(sub.id)
-                                }}
+                                onClick={() => openCommentModal(sub.id)}
                                 disabled={hasCommented}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                                   hasCommented 
@@ -337,10 +403,7 @@ export default function MissionDetailPage() {
                               </button>
                               
                               <button 
-                                onClick={() => {
-                                  console.log('Share clicked for:', sub.id)
-                                  handleShare(sub)
-                                }}
+                                onClick={() => handleShare(sub)}
                                 disabled={hasShared}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                                   hasShared 
