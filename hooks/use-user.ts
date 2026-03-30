@@ -10,7 +10,8 @@ export function useUser() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet
+  // FIX: Check both APP_CONFIG AND database role
+  const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet || user?.role === 'admin'
 
   useEffect(() => {
     if (!publicKey) { setUser(null); return }
@@ -21,8 +22,8 @@ export function useUser() {
     setLoading(true)
     try {
       // Try to find existing user
-      let { data, error } = await supabase
-        .from('users')
+      let { data, error } = await (supabase
+        .from('users') as any)
         .select('*')
         .eq('wallet_address', walletAddress)
         .single()
@@ -37,6 +38,8 @@ export function useUser() {
             role,
             username: `user_${walletAddress.slice(0, 6)}`,
             referral_code: walletAddress.slice(0, 8).toUpperCase(),
+            total_points: 0,
+            total_earned: 0,
           })
           .select()
           .single()
@@ -56,7 +59,10 @@ export function useUser() {
     if (!user) return
     const { data, error } = await (supabase
       .from('users') as any)
-      .update(updates)
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', user.id)
       .select()
       .single()
@@ -64,5 +70,20 @@ export function useUser() {
     return { data, error }
   }
 
-  return { user, loading, isAdmin, connected, updateUser, refetch: () => publicKey && loadOrCreateUser(publicKey.toBase58()) }
+  // FIX: Add helper flags for other roles
+  const isBrand = user?.role === 'brand'
+  const isCreator = user?.role === 'creator'
+  const isUser = user?.role === 'user' || !user?.role
+
+  return { 
+    user, 
+    loading, 
+    isAdmin, 
+    isBrand,
+    isCreator,
+    isUser,
+    connected, 
+    updateUser, 
+    refetch: () => publicKey && loadOrCreateUser(publicKey.toBase58()) 
+  }
 }
