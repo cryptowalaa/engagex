@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
-import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, Eye } from 'lucide-react'
+import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, ImageIcon } from 'lucide-react'
 import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -28,13 +28,22 @@ export default function MissionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [userEngagements, setUserEngagements] = useState<Record<string, string[]>>({})
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [commentModal, setCommentModal] = useState<{ open: boolean; submissionId: string | null }>({ open: false, submissionId: null })
+  const [commentText, setCommentText] = useState('')
 
   useEffect(() => {
     if (!id) return
-    async function load() {
+    loadData()
+  }, [id, publicKey])
+
+  async function loadData() {
+    setLoading(true)
+    try {
+      // Load mission
       const { data: m } = await (supabase.from('missions') as any).select('*').eq('id', id).single()
       setMission(m)
       
+      // Load submissions
       const { data: subs } = await (supabase
         .from('submissions') as any)
         .select(`*, creator:users(id, username, wallet_address), engagement:engagements(*)`)
@@ -43,17 +52,26 @@ export default function MissionDetailPage() {
       
       setSubmissions(subs || [])
       
+      // Load current user and their engagements
       if (publicKey) {
         const { data: u } = await (supabase.from('users') as any).select('*').eq('wallet_address', publicKey.toBase58()).single()
         if (u) {
           setCurrentUser(u)
-          const { data: mine } = await (supabase.from('submissions') as any).select('id').eq('mission_id', id).eq('creator_id', u.id).single()
+          
+          // Check if user submitted to this mission
+          const { data: mine } = await (supabase.from('submissions') as any)
+            .select('id')
+            .eq('mission_id', id)
+            .eq('creator_id', u.id)
+            .single()
           setHasSubmitted(!!mine)
           
-          // Load user's previous engagements
+          // Load user's previous engagements for ALL submissions
           const { data: engagements } = await (supabase.from('user_engagements') as any)
             .select('submission_id, action_type')
             .eq('user_id', u.id)
+          
+          console.log('Loaded engagements:', engagements) // DEBUG
           
           const engagementMap: Record<string, string[]> = {}
           engagements?.forEach((e: any) => {
@@ -63,13 +81,17 @@ export default function MissionDetailPage() {
           setUserEngagements(engagementMap)
         }
       }
+    } catch (error) {
+      console.error('Load error:', error)
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [id, publicKey])
+  }
 
   // Handle user engagement (like/comment/share)
-  const handleEngagement = async (submissionId: string, actionType: 'like' | 'comment' | 'share') => {
+  const handleEngagement = async (submissionId: string, actionType: 'like' | 'comment' | 'share', metadata?: any) => {
+    console.log('handleEngagement called:', { submissionId, actionType, currentUser }) // DEBUG
+    
     if (!currentUser) {
       toast.error('Connect wallet first')
       return
@@ -84,24 +106,101 @@ export default function MissionDetailPage() {
     try {
       const points = ENGAGEMENT_POINTS[actionType]
       
-      // Insert user engagement
-      await (supabase.from('user_engagements') as any).insert({
+      console.log('Inserting engagement:', { // DEBUG
         user_id: currentUser.id,
         submission_id: submissionId,
         action_type: actionType,
-        points: points
+        points: points,
+        metadata: metadata || null
       })
+      
+      // Insert user engagement
+      const { data: insertData, error: insertError } = await (supabase.from('user_engagements') as any)
+        .insert({
+          user_id: currentUser.id,
+          submission_id: submissionId,
+          action_type: actionType,
+          points: points,
+          metadata: metadata || null,
+          created_at: new Date().toISOString()
+        })
+        .select()
 
-      // Update local state
+      if (insertError) {
+        console.error('Insert error:', insertError)
+        throw insertError
+      }
+
+      console.log('Insert success:', insertData) // DEBUG
+
+      // Update local state immediately
       setUserEngagements(prev => ({
         ...prev,
         [submissionId]: [...(prev[submissionId] || []), actionType]
       }))
 
+      // Refresh user data to get updated total_points
+      const { data: updatedUser } = await (supabase.from('users') as any)
+        .select('*')
+        .eq('id', currentUser.id)
+        .single()
+      
+      if (updatedUser) {
+        setCurrentUser(updatedUser)
+      }
+
       toast.success(`+${points} points! You ${actionType}d the content!`)
     } catch (e: any) {
+      console.error('Engagement error:', e)
       toast.error(e.message || 'Failed to record engagement')
     }
+  }
+
+  // Open comment modal
+  const openCommentModal = (submissionId: string) => {
+    if (!currentUser) {
+      toast.error('Connect wallet first')
+      return
+    }
+    if (userEngagements[submissionId]?.includes('comment')) {
+      toast.error('You already commented on this!')
+      return
+    }
+    setCommentModal({ open: true, submissionId })
+  }
+
+  // Submit comment
+  const submitComment = async () => {
+    if (!commentModal.submissionId || !commentText.trim()) {
+      toast.error('Please enter a comment')
+      return
+    }
+    
+    await handleEngagement(commentModal.submissionId, 'comment', { text: commentText })
+    setCommentModal({ open: false, submissionId: null })
+    setCommentText('')
+  }
+
+  // Handle share with Twitter
+  const handleShare = async (submission: any) => {
+    if (!currentUser) {
+      toast.error('Connect wallet first')
+      return
+    }
+    if (userEngagements[submission.id]?.includes('share')) {
+      toast.error('You already shared this!')
+      return
+    }
+
+    const shareUrl = submission.content_link
+    const tweetText = `Check out this content on EngageX! 🚀\n\n${shareUrl}\n\n#EngageX #Web3`
+
+    // Open Twitter share
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`
+    window.open(twitterUrl, '_blank', 'width=600,height=400')
+
+    // Record engagement
+    await handleEngagement(submission.id, 'share', { platform: 'twitter', url: shareUrl })
   }
 
   if (loading) return (
@@ -129,6 +228,20 @@ export default function MissionDetailPage() {
             {/* Main content */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
+                {/* FIX: Add Mission Image */}
+                {mission.image_url && (
+                  <div className="mb-4 h-48 rounded-xl overflow-hidden bg-brand-dark">
+                    <img 
+                      src={mission.image_url} 
+                      alt={mission.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                )}
+                
                 <div className="flex items-start justify-between mb-4">
                   <span className="text-xs px-3 py-1 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-full">{mission.status}</span>
                   <span className="text-xs text-gray-500">{mission.category}</span>
@@ -188,15 +301,18 @@ export default function MissionDetailPage() {
                             </a>
                           </div>
 
-                          {/* User Engagement Buttons */}
+                          {/* User Engagement Buttons - FIX: Better click handling */}
                           {currentUser && currentUser.id !== sub.creator_id && (
                             <div className="flex gap-2 pt-3 border-t border-brand-border">
                               <button 
-                                onClick={() => handleEngagement(sub.id, 'like')}
+                                onClick={() => {
+                                  console.log('Like clicked for:', sub.id)
+                                  handleEngagement(sub.id, 'like')
+                                }}
                                 disabled={hasLiked}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                                   hasLiked 
-                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30 cursor-not-allowed' 
                                     : 'bg-brand-card border border-brand-border text-gray-300 hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400'
                                 }`}
                               >
@@ -205,11 +321,14 @@ export default function MissionDetailPage() {
                               </button>
                               
                               <button 
-                                onClick={() => handleEngagement(sub.id, 'comment')}
+                                onClick={() => {
+                                  console.log('Comment clicked for:', sub.id)
+                                  openCommentModal(sub.id)
+                                }}
                                 disabled={hasCommented}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                                   hasCommented 
-                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 cursor-not-allowed' 
                                     : 'bg-brand-card border border-brand-border text-gray-300 hover:bg-blue-500/10 hover:border-blue-500/30 hover:text-blue-400'
                                 }`}
                               >
@@ -218,11 +337,14 @@ export default function MissionDetailPage() {
                               </button>
                               
                               <button 
-                                onClick={() => handleEngagement(sub.id, 'share')}
+                                onClick={() => {
+                                  console.log('Share clicked for:', sub.id)
+                                  handleShare(sub)
+                                }}
                                 disabled={hasShared}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                                   hasShared 
-                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30 cursor-not-allowed' 
                                     : 'bg-brand-card border border-brand-border text-gray-300 hover:bg-green-500/10 hover:border-green-500/30 hover:text-green-400'
                                 }`}
                               >
@@ -276,6 +398,38 @@ export default function MissionDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Comment Modal */}
+      {commentModal.open && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-brand-card border border-brand-border rounded-2xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4">Add Comment (+2 points)</h3>
+            <textarea
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="Write your comment here..."
+              className="w-full bg-brand-dark border border-brand-border rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-green/50 resize-none mb-4"
+              rows={4}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCommentModal({ open: false, submissionId: null })}
+                className="flex-1 py-3 bg-brand-dark border border-brand-border text-gray-300 rounded-xl font-semibold hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitComment}
+                disabled={!commentText.trim()}
+                className="flex-1 py-3 bg-brand-green text-brand-dark rounded-xl font-semibold hover:bg-opacity-90 transition-all disabled:opacity-50"
+              >
+                Submit Comment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   )
