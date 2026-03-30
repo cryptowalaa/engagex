@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
-import { Clock, Users, Trophy, ExternalLink } from 'lucide-react'
+import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, Eye } from 'lucide-react'
 import { timeUntil, timeAgo, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
 
@@ -24,12 +24,20 @@ export default function MissionDetailPage() {
     async function load() {
       const { data: m } = await (supabase.from('missions') as any).select('*').eq('id', id).single()
       setMission(m)
+      
+      // FIX: Fetch submissions WITH engagement data
       const { data: subs } = await (supabase
         .from('submissions') as any)
-        .select('*, creator:users(id, username, wallet_address)')
+        .select(`
+          *,
+          creator:users(id, username, wallet_address),
+          engagement:engagements(*)
+        `)
         .eq('mission_id', id)
         .order('score', { ascending: false })
+      
       setSubmissions(subs || [])
+      
       if (publicKey) {
         const { data: u } = await (supabase.from('users') as any).select('id').eq('wallet_address', publicKey.toBase58()).single()
         if (u) {
@@ -96,8 +104,28 @@ export default function MissionDetailPage() {
                             <span className="text-xs text-gray-500">{sub.platform}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-brand-green font-bold text-sm">{Number(sub.score).toFixed(0)} pts</span>
+                        
+                        {/* FIX: Show engagement metrics */}
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <span className="flex items-center gap-1" title="Likes ×1">
+                              <Heart size={12} className="text-red-400"/>
+                              {sub.engagement?.likes || 0}
+                            </span>
+                            <span className="flex items-center gap-1" title="Comments ×3">
+                              <MessageCircle size={12} className="text-blue-400"/>
+                              {sub.engagement?.comments || 0}
+                            </span>
+                            <span className="flex items-center gap-1" title="Shares ×5">
+                              <Share2 size={12} className="text-green-400"/>
+                              {sub.engagement?.shares || 0}
+                            </span>
+                            <span className="flex items-center gap-1" title="Watch Time ×2">
+                              <Eye size={12} className="text-purple-400"/>
+                              {sub.engagement?.watch_time || 0}s
+                            </span>
+                          </div>
+                          <span className="text-brand-green font-bold text-sm min-w-[60px] text-right">{Number(sub.score).toFixed(0)} pts</span>
                           <a href={sub.content_link} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-brand-green transition-colors">
                             <ExternalLink size={14} />
                           </a>
