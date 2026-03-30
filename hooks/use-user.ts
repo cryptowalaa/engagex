@@ -10,7 +10,7 @@ export function useUser() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // FIX: Check both APP_CONFIG AND database role
+  // Check admin by wallet or role
   const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet || user?.role === 'admin'
 
   useEffect(() => {
@@ -40,6 +40,8 @@ export function useUser() {
             referral_code: walletAddress.slice(0, 8).toUpperCase(),
             total_points: 0,
             total_earned: 0,
+            is_verified: false,
+            brand_status: null,
           })
           .select()
           .single()
@@ -70,8 +72,49 @@ export function useUser() {
     return { data, error }
   }
 
-  // FIX: Add helper flags for other roles
-  const isBrand = user?.role === 'brand'
+  // ✅ NEW: Apply as Brand function
+  async function applyAsBrand(brandData: {
+    website_url: string
+    twitter_handle: string
+    discord_handle?: string
+    linkedin_url?: string
+    telegram_handle?: string
+    bio?: string
+  }) {
+    if (!user) return { error: 'No user' }
+    
+    try {
+      const { data, error } = await (supabase
+        .from('users') as any)
+        .update({
+          role: 'brand_pending',
+          brand_status: 'pending',
+          brand_submitted_at: new Date().toISOString(),
+          website_url: brandData.website_url,
+          twitter_handle: brandData.twitter_handle,
+          discord_handle: brandData.discord_handle || null,
+          linkedin_url: brandData.linkedin_url || null,
+          telegram_handle: brandData.telegram_handle || null,
+          bio: brandData.bio || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+        .select()
+        .single()
+
+      if (!error && data) {
+        setUser(data)
+        return { success: true, data }
+      }
+      return { error }
+    } catch (e: any) {
+      return { error: e.message }
+    }
+  }
+
+  // Role checks
+  const isBrand = user?.role === 'brand' && user?.brand_status === 'approved'
+  const isBrandPending = user?.role === 'brand_pending' || user?.brand_status === 'pending'
   const isCreator = user?.role === 'creator'
   const isUser = user?.role === 'user' || !user?.role
 
@@ -80,10 +123,12 @@ export function useUser() {
     loading, 
     isAdmin, 
     isBrand,
+    isBrandPending,
     isCreator,
     isUser,
     connected, 
     updateUser, 
+    applyAsBrand,  // ✅ NEW
     refetch: () => publicKey && loadOrCreateUser(publicKey.toBase58()) 
   }
 }
