@@ -19,9 +19,19 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await updateUser({ username: username || user?.username || '', bio: bio || user?.bio || '', twitter_handle: twitter || user?.twitter_handle || '' })
+      // Remove @ if user included it
+      const cleanTwitter = twitter.replace('@', '')
+      
+      await updateUser({ 
+        username: username || user?.username || '', 
+        bio: bio || user?.bio || '', 
+        twitter_handle: cleanTwitter || user?.twitter_handle || '' 
+      })
+      
       toast.success('Profile updated!')
-    } catch { toast.error('Failed to save') }
+    } catch (e: any) { 
+      toast.error(e.message || 'Failed to save') 
+    }
     finally { setSaving(false) }
   }
 
@@ -41,13 +51,13 @@ export default function ProfilePage() {
               <div>
                 <h2 className="text-xl font-bold text-white">{user?.username || 'Anonymous'}</h2>
                 <p className="text-brand-green font-mono text-xs mt-1">{user ? shortenAddress(user.wallet_address, 8) : 'Not connected'}</p>
-                <span className={`inline-block mt-2 text-xs px-2.5 py-1 rounded-full border capitalize ${user?.role==='admin'?'bg-brand-purple/10 text-brand-purple border-brand-purple/20':user?.role==='creator'?'bg-brand-green/10 text-brand-green border-brand-green/20':'bg-blue-500/10 text-blue-400 border-blue-400/20'}`}>{user?.role || 'user'}</span>
+                <span className={`inline-block mt-2 text-xs px-2.5 py-1 rounded-full border capitalize ${user?.role==='admin'?'bg-brand-purple/10 text-brand-purple border-brand-purple/20':user?.role==='creator'?'bg-brand-green/10 text-brand-green border-brand-green/20':user?.role==='brand'?'bg-yellow-500/10 text-yellow-400 border-yellow-400/20':'bg-blue-500/10 text-blue-400 border-blue-400/20'}`}>{user?.role || 'user'}</span>
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4">
-              {[['Total Earned', `${user?.total_earned || 0} USDC`, 'text-brand-green'], ['Role', user?.role || '—', 'text-brand-purple'], ['Referral Code', user?.referral_code || '—', 'text-yellow-400']].map(([label, val, col]) => (
+            {/* Stats - FIX: Added Total Points */}
+            <div className="grid grid-cols-2 gap-4">
+              {[['Total Earned', `${user?.total_earned || 0} USDC`, 'text-brand-green'], ['Total Points', `${user?.total_points || 0} pts`, 'text-brand-purple'], ['Role', user?.role || '—', 'text-yellow-400'], ['Referral Code', user?.referral_code || '—', 'text-blue-400']].map(([label, val, col]) => (
                 <div key={label} className="bg-brand-card border border-brand-border rounded-2xl p-4 text-center">
                   <p className={`font-black text-lg ${col}`}>{val}</p>
                   <p className="text-xs text-gray-500 mt-1">{label}</p>
@@ -64,7 +74,10 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Twitter Handle</label>
-                <input className={INPUT} placeholder="@yourhandle" value={twitter} onChange={e => setTwitter(e.target.value)} />
+                <div className="relative">
+                  <span className="absolute left-4 top-3.5 text-gray-500">@</span>
+                  <input className={`${INPUT} pl-8`} placeholder="yourhandle" value={twitter} onChange={e => setTwitter(e.target.value)} />
+                </div>
               </div>
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Bio</label>
