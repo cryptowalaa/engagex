@@ -191,8 +191,8 @@ export default function AdminRewards() {
 
       if (rewardError) throw rewardError
 
-      // ✅ FIXED: Proper null check for user
-      const { data: user, error: userError } = await supabase
+      // ✅ FIXED: Use type assertion for user data
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('total_earned')
         .eq('id', creatorId)
@@ -200,9 +200,10 @@ export default function AdminRewards() {
 
       if (userError) throw userError
       
-      // ✅ FIXED: Null check before update
-      if (user) {
-        const currentEarned = user.total_earned || 0
+      // ✅ FIXED: Type assertion to avoid never type
+      if (userData) {
+        const user = userData as any
+        const currentEarned = user?.total_earned || 0
         await (supabase
           .from('users') as any)
           .update({ total_earned: currentEarned + amount })
