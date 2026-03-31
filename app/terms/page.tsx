@@ -179,10 +179,10 @@ export default function TermsPage() {
               {/* Section 11 */}
               <div className="mt-8">
                 <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-                  <span className="text-brand-green">11.</span> No Warranty
+                                   <span className="text-brand-green">11.</span> No Warranty
                 </h2>
                 <p className="text-gray-400 leading-relaxed">
-                  The platform is provided "as is" without any warranties of any kind.
+                  The platform is provided &quot;as is&quot; without any warranties of any kind.
                 </p>
               </div>
 
