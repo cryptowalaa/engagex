@@ -1,4 +1,5 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
@@ -49,6 +50,22 @@ function YellowTick({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }) {
       </svg>
     </span>
   )
+}
+
+// ✅ FIXED: Helper function to get correct image URL
+function getImageUrl(imageUrl: string | null): string {
+  if (!imageUrl) return ''
+  
+  // If already full URL, return as-is
+  if (imageUrl.startsWith('http')) return imageUrl
+  
+  // If it's a storage path, construct full URL
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return imageUrl
+  
+  // Handle both with and without 'avatars/' prefix
+  const cleanPath = imageUrl.replace(/^avatars\//, '')
+  return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
 }
 
 export default function MissionsPage() {
@@ -176,14 +193,19 @@ export default function MissionsPage() {
                   href={`/missions/${mission.id}`}
                   className="group bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-green/30 transition-all duration-300 card-hover"
                 >
-                  {/* Image */}
+                  {/* ✅ FIXED: Image with correct URL handling */}
                   <div className="h-48 bg-brand-dark relative overflow-hidden">
                     {mission.image_url ? (
                       <Image
-                        src={mission.image_url}
+                        src={getImageUrl(mission.image_url)}
                         alt={mission.title}
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          // Fallback on error
+                          ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                        }}
+                        unoptimized
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-700">
@@ -199,7 +221,7 @@ export default function MissionsPage() {
 
                   {/* Content */}
                   <div className="p-5">
-                    {/* Brand Info with BOTH Badges - CLICKABLE */}
+                    {/* Brand Info */}
                     <div className="flex items-center gap-2 mb-3">
                       <Link 
                         href={`/brand/${mission.brand?.id}`}
@@ -209,11 +231,12 @@ export default function MissionsPage() {
                         <div className="w-6 h-6 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold group-hover/brand:scale-110 transition-transform overflow-hidden">
                           {mission.brand?.avatar_url ? (
                             <Image 
-                              src={mission.brand.avatar_url} 
+                              src={getImageUrl(mission.brand.avatar_url)} 
                               alt={mission.brand?.username || 'Brand'} 
                               width={24} 
                               height={24}
                               className="object-cover w-full h-full"
+                              unoptimized
                             />
                           ) : (
                             mission.brand?.username?.[0]?.toUpperCase() || 'B'
@@ -224,7 +247,7 @@ export default function MissionsPage() {
                         </span>
                       </Link>
                       
-                      {/* Green Verified Badge (Approved brand) */}
+                      {/* Verified Badges */}
                       {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-0.5 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-1.5 py-0.5 rounded">
                           <CheckCircle size={10} className="fill-current" />
@@ -232,7 +255,6 @@ export default function MissionsPage() {
                         </span>
                       )}
                       
-                      {/* Yellow Official Badge (Premium/Subscription) */}
                       {mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-1 text-xs">
                           <YellowTick size="sm" />
