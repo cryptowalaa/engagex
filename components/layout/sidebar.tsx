@@ -5,7 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { 
   LayoutDashboard, Target, FileText, Trophy, User, 
   Users, Gift, Shield, Zap, TrendingUp, Building2, 
-  CheckCircle, Clock
+  CheckCircle, Clock, Crown
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import { cn } from '@/lib/utils/helpers'
@@ -25,7 +25,8 @@ const brandLinks = [
 
 const adminLinks = [
   { href: '/admin', label: 'Admin Dashboard', icon: Shield },
-  { href: '/admin/brands', label: 'Brand Applications', icon: Building2 },  // ✅ NEW
+  { href: '/admin/brands', label: 'Brand Applications', icon: Building2 },
+  { href: '/admin/official-brands', label: 'Official Brands', icon: Crown },  // ✅ NEW: Yellow tick management
   { href: '/admin/missions', label: 'Manage Missions', icon: Target },
   { href: '/admin/users', label: 'Manage Users', icon: Users },
   { href: '/admin/rewards', label: 'Distribute Rewards', icon: Gift },
@@ -40,7 +41,7 @@ const commonLinks = [
 export function Sidebar() {
   const pathname = usePathname()
   const { publicKey } = useWallet()
-  const { isAdmin, isBrand, isBrandPending, user } = useUser()  // ✅ Use hook instead of direct check
+  const { isAdmin, isBrand, isBrandPending, user } = useUser()
 
   const SidebarLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: any }) => (
     <Link href={href}
@@ -80,7 +81,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* ✅ UPDATED: Brand Section Logic */}
+      {/* Brand Section Logic */}
       <div>
         <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider px-3 mb-2">Brand</p>
         <div className="space-y-1">
@@ -121,12 +122,22 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* ✅ NEW: Show Verified Badge if approved brand */}
-      {isBrand && user?.is_verified && (
+      {/* Show Green Verified Badge if approved brand */}
+      {isBrand && user?.is_verified && !user?.is_official_verified && (
         <div className="px-3 py-2.5 rounded-lg bg-brand-green/10 border border-brand-green/20">
           <div className="flex items-center gap-2 text-brand-green text-sm font-medium">
             <CheckCircle size={16} className="fill-current" />
             <span>Verified Brand</span>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: Show Yellow Official Badge if official verified brand */}
+      {isBrand && user?.is_official_verified && (
+        <div className="px-3 py-2.5 rounded-lg bg-[#FFAD1F]/10 border border-[#FFAD1F]/20">
+          <div className="flex items-center gap-2 text-[#FFAD1F] text-sm font-medium">
+            <Crown size={16} className="fill-current" />
+            <span>Official Brand</span>
           </div>
         </div>
       )}
