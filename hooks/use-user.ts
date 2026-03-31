@@ -8,47 +8,60 @@ import { APP_CONFIG } from '@/lib/config'
 export function useUser() {
   const { publicKey, connected } = useWallet()
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Check admin by wallet or role
   const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet || user?.role === 'admin'
 
   useEffect(() => {
-    if (!publicKey) { setUser(null); return }
+    if (!publicKey) { 
+      setUser(null)
+      setLoading(false)
+      return 
+    }
     loadOrCreateUser(publicKey.toBase58())
   }, [publicKey])
 
   async function loadOrCreateUser(walletAddress: string) {
     setLoading(true)
     try {
-      // Try to find existing user
-      let { data, error } = await (supabase
+      // ✅ FIXED: Use maybeSingle() instead of single() to avoid errors
+      const { data, error } = await (supabase
         .from('users') as any)
         .select('*')
         .eq('wallet_address', walletAddress)
+        .maybeSingle()
+
+      if (error) {
+        console.error('Fetch user error:', error)
+        setLoading(false)
+        return
+      }
+
+      if (data) {
+        setUser(data)
+        setLoading(false)
+        return
+      }
+
+      // User doesn't exist — create one
+      const role = walletAddress === APP_CONFIG.adminWallet ? 'admin' : 'user'
+      const { data: newUser, error: createError } = await (supabase
+        .from('users') as any)
+        .insert({
+          wallet_address: walletAddress,
+          role,
+          username: `user_${walletAddress.slice(0, 6)}`,
+          referral_code: walletAddress.slice(0, 8).toUpperCase(),
+          total_points: 0,
+          total_earned: 0,
+          is_verified: false,
+          brand_status: null,
+        })
+        .select()
         .single()
 
-      if (error && error.code === 'PGRST116') {
-        // User doesn't exist — create one
-        const role = walletAddress === APP_CONFIG.adminWallet ? 'admin' : 'user'
-        const { data: newUser, error: createError } = await (supabase
-          .from('users') as any)
-          .insert({
-            wallet_address: walletAddress,
-            role,
-            username: `user_${walletAddress.slice(0, 6)}`,
-            referral_code: walletAddress.slice(0, 8).toUpperCase(),
-            total_points: 0,
-            total_earned: 0,
-            is_verified: false,
-            brand_status: null,
-          })
-          .select()
-          .single()
-
-        if (!createError) setUser(newUser)
-      } else if (data) {
-        setUser(data)
+      if (!createError && newUser) {
+        setUser(newUser)
       }
     } catch (e) {
       console.error('useUser error:', e)
@@ -65,14 +78,13 @@ export function useUser() {
         ...updates,
         updated_at: new Date().toISOString()
       })
-      .eq('id', user.id)
+      .eq('wallet_address', user.wallet_address)
       .select()
       .single()
     if (!error && data) setUser(data)
     return { data, error }
   }
 
-  // ✅ NEW: Apply as Brand function
   async function applyAsBrand(brandData: {
     website_url: string
     twitter_handle: string
@@ -98,7 +110,7 @@ export function useUser() {
           bio: brandData.bio || null,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id)
+        .eq('wallet_address', user.wallet_address)
         .select()
         .single()
 
@@ -112,7 +124,6 @@ export function useUser() {
     }
   }
 
-  // Role checks
   const isBrand = user?.role === 'brand' && user?.brand_status === 'approved'
   const isBrandPending = user?.role === 'brand_pending' || user?.brand_status === 'pending'
   const isCreator = user?.role === 'creator'
@@ -128,7 +139,7 @@ export function useUser() {
     isUser,
     connected, 
     updateUser, 
-    applyAsBrand,  // ✅ NEW
+    applyAsBrand,
     refetch: () => publicKey && loadOrCreateUser(publicKey.toBase58()) 
   }
 }
