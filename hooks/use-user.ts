@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
+
+import { useState, useEffect, useCallback } from 'react'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { supabase } from '@/lib/supabase/client'
 import type { User } from '@/types/database'
@@ -8,127 +9,168 @@ import { APP_CONFIG } from '@/lib/config'
 export function useUser() {
   const { publicKey, connected } = useWallet()
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Check admin by wallet or role
-  const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet || user?.role === 'admin'
+  const walletAddress = publicKey?.toBase58()
 
-  useEffect(() => {
-    if (!publicKey) { setUser(null); return }
-    loadOrCreateUser(publicKey.toBase58())
-  }, [publicKey])
+  // Check admin by wallet
+  const isAdmin = walletAddress === APP_CONFIG.adminWallet || user?.role === 'admin'
 
-  async function loadOrCreateUser(walletAddress: string) {
+  // Load or create user
+  const loadOrCreateUser = useCallback(async (address: string) => {
     setLoading(true)
+    setError(null)
+    
     try {
-      // Try to find existing user
-      let { data, error } = await (supabase
-        .from('users') as any)
+      // Try to find existing user by wallet_address
+      const { data, error: fetchError } = await supabase
+        .from('users')
         .select('*')
-        .eq('wallet_address', walletAddress)
+        .eq('wallet_address', address)
+        .maybeSingle()
+
+      if (fetchError) {
+        console.error('Fetch user error:', fetchError)
+        setError(fetchError.message)
+        setLoading(false)
+        return
+      }
+
+      if (data) {
+        setUser(data)
+        setLoading(false)
+        return
+      }
+
+      // User doesn't exist — create one
+      const role = address === APP_CONFIG.adminWallet ? 'admin' : 'user'
+      const newUser = {
+        wallet_address: address,
+        role,
+        username: `user_${address.slice(0, 6)}`,
+        referral_code: address.slice(0, 8).toUpperCase(),
+        total_points: 0,
+        total_earned: 0,
+        is_verified: false,
+        brand_status: null,
+      }
+
+      const { data: createdUser, error: createError } = await supabase
+        .from('users')
+        .insert(newUser)
+        .select()
         .single()
 
-      if (error && error.code === 'PGRST116') {
-        // User doesn't exist — create one
-        const role = walletAddress === APP_CONFIG.adminWallet ? 'admin' : 'user'
-        const { data: newUser, error: createError } = await (supabase
-          .from('users') as any)
-          .insert({
-            wallet_address: walletAddress,
-            role,
-            username: `user_${walletAddress.slice(0, 6)}`,
-            referral_code: walletAddress.slice(0, 8).toUpperCase(),
-            total_points: 0,
-            total_earned: 0,
-            is_verified: false,
-            brand_status: null,
-          })
-          .select()
-          .single()
-
-        if (!createError) setUser(newUser)
-      } else if (data) {
-        setUser(data)
+      if (createError) {
+        console.error('Create user error:', createError)
+        setError(createError.message)
+      } else {
+        setUser(createdUser)
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('useUser error:', e)
+      setError(e.message)
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    if (!walletAddress) {
+      setUser(null)
+      setLoading(false)
+      return
+    }
+    
+    loadOrCreateUser(walletAddress)
+  }, [walletAddress, loadOrCreateUser])
+
+  // Update user profile
+  const updateUser = async (updates: Partial<User>) => {
+    if (!user?.wallet_address) {
+      return { error: 'No user wallet connected' }
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('wallet_address', user.wallet_address)
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      if (data) setUser(data)
+      return { data, error: null }
+    } catch (error: any) {
+      console.error('Update user error:', error)
+      return { data: null, error }
+    }
   }
 
-  async function updateUser(updates: Partial<User>) {
-    if (!user) return
-    const { data, error } = await (supabase
-      .from('users') as any)
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', user.id)
-      .select()
-      .single()
-    if (!error && data) setUser(data)
-    return { data, error }
-  }
-
-  // ✅ NEW: Apply as Brand function
-  async function applyAsBrand(brandData: {
+  // Apply as Brand
+  const applyAsBrand = async (brandData: {
     website_url: string
     twitter_handle: string
     discord_handle?: string
     linkedin_url?: string
     telegram_handle?: string
     bio?: string
-  }) {
-    if (!user) return { error: 'No user' }
+  }) => {
+    if (!user?.wallet_address) return { error: 'No user connected' }
     
     try {
-      const { data, error } = await (supabase
-        .from('users') as any)
+      const { data, error } = await supabase
+        .from('users')
         .update({
           role: 'brand_pending',
           brand_status: 'pending',
           brand_submitted_at: new Date().toISOString(),
-          website_url: brandData.website_url,
-          twitter_handle: brandData.twitter_handle,
-          discord_handle: brandData.discord_handle || null,
-          linkedin_url: brandData.linkedin_url || null,
-          telegram_handle: brandData.telegram_handle || null,
-          bio: brandData.bio || null,
+          ...brandData,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id)
+        .eq('wallet_address', user.wallet_address)
         .select()
         .single()
 
-      if (!error && data) {
-        setUser(data)
-        return { success: true, data }
-      }
-      return { error }
+      if (error) throw error
+      
+      if (data) setUser(data)
+      return { success: true, data }
     } catch (e: any) {
       return { error: e.message }
     }
   }
 
+  // Refetch user data
+  const refetch = useCallback(() => {
+    if (walletAddress) {
+      loadOrCreateUser(walletAddress)
+    }
+  }, [walletAddress, loadOrCreateUser])
+
   // Role checks
   const isBrand = user?.role === 'brand' && user?.brand_status === 'approved'
   const isBrandPending = user?.role === 'brand_pending' || user?.brand_status === 'pending'
   const isCreator = user?.role === 'creator'
-  const isUser = user?.role === 'user' || !user?.role
 
   return { 
     user, 
     loading, 
+    error,
     isAdmin, 
     isBrand,
     isBrandPending,
     isCreator,
-    isUser,
+    isUser: !isAdmin && !isBrand && !isCreator,
     connected, 
     updateUser, 
-    applyAsBrand,  // ✅ NEW
-    refetch: () => publicKey && loadOrCreateUser(publicKey.toBase58()) 
+    applyAsBrand,
+    refetch
   }
 }
