@@ -22,8 +22,7 @@ export function useUser() {
     setLoading(true)
     try {
       // Try to find existing user
-      let { data, error } = await (supabase
-        .from('users') as any)
+      let { data, error } = await (supabase.from('users') as any)
         .select('*')
         .eq('wallet_address', walletAddress)
         .single()
