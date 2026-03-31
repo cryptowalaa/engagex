@@ -10,6 +10,7 @@ import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, Check
 import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 
 // Points configuration
 const ENGAGEMENT_POINTS = {
@@ -263,7 +264,7 @@ export default function MissionDetailPage() {
     }
 
     const shareUrl = submission.content_link
-    const tweetText = `Check out this content on EngageX! 🚀\n\n${shareUrl}\n\n#EngageX #Web3`
+    const tweetText = `Check out this content on EngageZ! 🚀\n\n${shareUrl}\n\n#EngageZ #Web3`
 
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`
     window.open(twitterUrl, '_blank', 'width=600,height=400')
@@ -298,11 +299,12 @@ export default function MissionDetailPage() {
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
                 {/* Mission Image */}
                 {mission.image_url && (
-                  <div className="mb-4 h-48 rounded-xl overflow-hidden bg-brand-dark">
-                    <img 
+                  <div className="mb-4 h-48 rounded-xl overflow-hidden bg-brand-dark relative">
+                    <Image 
                       src={mission.image_url} 
                       alt={mission.title}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none'
                       }}
@@ -310,14 +312,27 @@ export default function MissionDetailPage() {
                   </div>
                 )}
                 
-                {/* Brand Info with Verified Badge */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple font-bold">
-                    {mission.brand?.username?.[0]?.toUpperCase() || 'B'}
+                {/* Brand Info with Verified Badge - CLICKABLE */}
+                <Link 
+                  href={`/brand/${mission.brand?.id}`}
+                  className="flex items-center gap-3 mb-4 p-3 -ml-3 rounded-xl hover:bg-white/5 transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple font-bold group-hover:scale-110 transition-transform overflow-hidden">
+                    {mission.brand?.avatar_url ? (
+                      <Image 
+                        src={mission.brand.avatar_url} 
+                        alt={mission.brand?.username || 'Brand'} 
+                        width={40} 
+                        height={40}
+                        className="object-cover w-full h-full"
+                      />
+                    ) : (
+                      mission.brand?.username?.[0]?.toUpperCase() || 'B'
+                    )}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-white font-semibold">
+                      <p className="text-white font-semibold group-hover:text-brand-green transition-colors">
                         {mission.brand?.username || shortenAddress(mission.brand?.wallet_address || '', 4)}
                       </p>
                       {/* Green Verified Badge */}
@@ -335,9 +350,10 @@ export default function MissionDetailPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">Brand</p>
+                    <p className="text-xs text-gray-500">Brand · Click to view profile</p>
                   </div>
-                </div>
+                  <ExternalLink size={16} className="text-gray-500 group-hover:text-brand-green transition-colors" />
+                </Link>
                 
                 <div className="flex items-start justify-between mb-4">
                   <span className="text-xs px-3 py-1 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-full">{mission.status}</span>
