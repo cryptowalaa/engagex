@@ -1,10 +1,11 @@
 'use client'
-import { useState, useRef } from 'react'
+
+import { useState, useRef, useEffect } from 'react'
 import { Navbar } from '@/components/layout/navbar'
 import { Sidebar } from '@/components/layout/sidebar'
 import { useUser } from '@/hooks/use-user'
 import { shortenAddress } from '@/lib/utils/helpers'
-import { User, Save, Camera, X, ExternalLink } from 'lucide-react'
+import { User, Save, Camera, ExternalLink } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
@@ -12,7 +13,7 @@ import Image from 'next/image'
 const INPUT = "w-full bg-brand-dark border border-brand-border rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-green/50"
 
 export default function ProfilePage() {
-  const { user, updateUser, loading, refetch } = useUser()
+  const { user, loading, refetch } = useUser()
   const [username, setUsername] = useState('')
   const [bio, setBio] = useState('')
   const [twitter, setTwitter] = useState('')
@@ -22,24 +23,53 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Set initial values when user loads
+  useEffect(() => {
+    if (user) {
+      setUsername(user.username || '')
+      setBio(user.bio || '')
+      setTwitter(user.twitter_handle || '')
+      setDiscord(user.discord_handle || '')
+      setWebsite(user.website_url || '')
+    }
+  }, [user])
+
+  // ✅ FIXED: Direct supabase update with correct RLS
   const handleSave = async () => {
+    if (!user?.id) {
+      toast.error('Please connect wallet first')
+      return
+    }
+
     setSaving(true)
     try {
       const cleanTwitter = twitter.replace('@', '')
       
-      await updateUser({ 
-        username: username || user?.username || '', 
-        bio: bio || user?.bio || '', 
-        twitter_handle: cleanTwitter || user?.twitter_handle || '',
-        discord_handle: discord || user?.discord_handle || '',
-        website_url: website || user?.website_url || ''
-      })
+      const { error } = await supabase
+        .from('users')
+        .update({
+          username: username || null,
+          bio: bio || null,
+          twitter_handle: cleanTwitter || null,
+          discord_handle: discord || null,
+          website_url: website || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (error) {
+        console.error('Update error:', error)
+        throw error
+      }
       
       toast.success('Profile updated!')
+      refetch()
     } catch (e: any) { 
+      console.error('Save error:', e)
       toast.error(e.message || 'Failed to save') 
+    } finally { 
+      setSaving(false) 
     }
-    finally { setSaving(false) }
   }
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,7 +80,6 @@ export default function ProfilePage() {
       return
     }
 
-    // Validate file
     if (!file.type.startsWith('image/')) {
       toast.error('Please upload an image file')
       return
@@ -63,10 +92,9 @@ export default function ProfilePage() {
     setUploadingAvatar(true)
     try {
       const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`
-      const filePath = `${fileName}`
+      const fileName = `${Date.now()}.${fileExt}`
+      const filePath = `${user.id}/${fileName}`
 
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, {
@@ -74,15 +102,27 @@ export default function ProfilePage() {
           upsert: true
         })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw uploadError
+      }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath)
 
-      // Update user record
-      await updateUser({ avatar_url: publicUrl })
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (updateError) {
+        console.error('Avatar update error:', updateError)
+        throw updateError
+      }
       
       toast.success('Avatar updated!')
       refetch()
@@ -98,6 +138,17 @@ export default function ProfilePage() {
     fileInputRef.current?.click()
   }
 
+  const getAvatarUrl = (url: string | null | undefined): string => {
+    if (!url) return ''
+    if (url.startsWith('http')) return url
+    
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!supabaseUrl) return url
+    
+    const cleanPath = url.replace(/^avatars\//, '')
+    return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+  }
+
   return (
     <div className="min-h-screen bg-brand-dark">
       <Navbar />
@@ -106,9 +157,8 @@ export default function ProfilePage() {
         <main className="flex-1 p-6 lg:p-8">
           <h1 className="text-3xl font-black mb-8">My <span className="text-brand-green">Profile</span></h1>
           <div className="max-w-2xl space-y-6">
-            {/* Profile Header with Avatar Upload */}
+            {/* Profile Header */}
             <div className="bg-brand-card border border-brand-border rounded-2xl p-6 flex items-center gap-5">
-              {/* Avatar with upload */}
               <div className="relative">
                 <div 
                   className="w-20 h-20 rounded-full border-2 border-brand-green flex items-center justify-center bg-gradient-to-br from-brand-green to-brand-purple text-brand-dark font-black text-3xl flex-shrink-0 overflow-hidden cursor-pointer group"
@@ -116,23 +166,22 @@ export default function ProfilePage() {
                 >
                   {user?.avatar_url ? (
                     <Image 
-                      src={user.avatar_url} 
+                      src={getAvatarUrl(user.avatar_url)} 
                       alt={user?.username || 'Avatar'} 
                       width={80} 
                       height={80}
                       className="object-cover w-full h-full"
+                      unoptimized
                     />
                   ) : (
                     user?.username?.[0]?.toUpperCase() || <User size={32} />
                   )}
                   
-                  {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <Camera size={24} className="text-white" />
                   </div>
                 </div>
                 
-                {/* Upload button */}
                 <button 
                   onClick={triggerFileInput}
                   disabled={uploadingAvatar}
@@ -157,11 +206,18 @@ export default function ProfilePage() {
               <div className="flex-1">
                 <h2 className="text-xl font-bold text-white">{user?.username || 'Anonymous'}</h2>
                 <p className="text-brand-green font-mono text-xs mt-1">{user ? shortenAddress(user.wallet_address, 8) : 'Not connected'}</p>
-                <span className={`inline-block mt-2 text-xs px-2.5 py-1 rounded-full border capitalize ${user?.role==='admin'?'bg-brand-purple/10 text-brand-purple border-brand-purple/20':user?.role==='creator'?'bg-brand-green/10 text-brand-green border-brand-green/20':user?.role==='brand'?'bg-yellow-500/10 text-yellow-400 border-yellow-400/20':'bg-blue-500/10 text-blue-400 border-blue-400/20'}`}>{user?.role || 'user'}</span>
+                <span className={`inline-block mt-2 text-xs px-2.5 py-1 rounded-full border capitalize ${
+                  user?.role === 'admin' ? 'bg-brand-purple/10 text-brand-purple border-brand-purple/20' :
+                  user?.role === 'creator' ? 'bg-brand-green/10 text-brand-green border-brand-green/20' :
+                  user?.role === 'brand' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-400/20' :
+                  'bg-blue-500/10 text-blue-400 border-blue-400/20'
+                }`}>
+                  {user?.role || 'user'}
+                </span>
               </div>
             </div>
 
-            {/* Social Links Display */}
+            {/* Social Links */}
             {(user?.twitter_handle || user?.discord_handle || user?.website_url) && (
               <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
                 <h3 className="text-sm font-semibold text-gray-400 mb-3">Social Links</h3>
@@ -224,35 +280,65 @@ export default function ProfilePage() {
               
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Username</label>
-                <input className={INPUT} placeholder={user?.username || 'Your username'} value={username} onChange={e => setUsername(e.target.value)} />
+                <input 
+                  className={INPUT} 
+                  placeholder="Your username" 
+                  value={username} 
+                  onChange={e => setUsername(e.target.value)} 
+                />
               </div>
               
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Twitter Handle</label>
                 <div className="relative">
                   <span className="absolute left-4 top-3.5 text-gray-500">@</span>
-                  <input className={`${INPUT} pl-8`} placeholder="yourhandle" value={twitter} onChange={e => setTwitter(e.target.value)} />
+                  <input 
+                    className={`${INPUT} pl-8`} 
+                    placeholder="yourhandle" 
+                    value={twitter} 
+                    onChange={e => setTwitter(e.target.value)} 
+                  />
                 </div>
               </div>
               
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Discord Username</label>
-                <input className={INPUT} placeholder="username#0000" value={discord} onChange={e => setDiscord(e.target.value)} />
+                <input 
+                  className={INPUT} 
+                  placeholder="username#0000" 
+                  value={discord} 
+                  onChange={e => setDiscord(e.target.value)} 
+                />
               </div>
               
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Website URL</label>
-                <input className={INPUT} placeholder="https://yourwebsite.com" value={website} onChange={e => setWebsite(e.target.value)} />
+                <input 
+                  className={INPUT} 
+                  placeholder="https://yourwebsite.com" 
+                  value={website} 
+                  onChange={e => setWebsite(e.target.value)} 
+                />
               </div>
               
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2">Bio</label>
-                <textarea className={`${INPUT} resize-none`} rows={3} placeholder="Tell us about yourself..." value={bio} onChange={e => setBio(e.target.value)} />
+                <textarea 
+                  className={`${INPUT} resize-none`} 
+                  rows={3} 
+                  placeholder="Tell us about yourself..." 
+                  value={bio} 
+                  onChange={e => setBio(e.target.value)} 
+                />
               </div>
               
-              <button onClick={handleSave} disabled={saving || loading}
-                className="w-full bg-brand-green text-brand-dark font-black py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all disabled:opacity-50">
-                <Save size={16} />{saving ? 'Saving...' : 'Save Changes'}
+              <button 
+                onClick={handleSave} 
+                disabled={saving || loading}
+                className="w-full bg-brand-green text-brand-dark font-black py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all disabled:opacity-50"
+              >
+                <Save size={16} />
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
