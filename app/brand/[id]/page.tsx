@@ -60,7 +60,7 @@ export default function BrandProfilePage() {
       
       setBrand(brandData)
 
-      // Load brand's missions
+      // Load brand&apos;s missions
       const { data: missionsData } = await (supabase.from('missions') as any)
         .select('*')
         .eq('brand_id', brandId)
@@ -319,7 +319,7 @@ export default function BrandProfilePage() {
             <div className="text-center py-20 bg-brand-card/30 border border-dashed border-brand-border rounded-2xl">
               <Target size={48} className="text-gray-700 mx-auto mb-4" />
               <p className="text-gray-400 text-lg">No missions yet</p>
-              <p className="text-gray-500 text-sm mt-2">This brand hasn't created any missions</p>
+              <p className="text-gray-500 text-sm mt-2">This brand hasn&apos;t created any missions</p>
             </div>
           )}
         </div>
