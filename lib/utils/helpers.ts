@@ -26,11 +26,18 @@ export function timeAgo(date: string): string {
   return formatDistanceToNow(new Date(date), { addSuffix: true })
 }
 
+// ✅ FIXED: "Expired left" -> "Expired" ya "X days left"
 export function timeUntil(date: string): string {
   const now = new Date()
   const target = new Date(date)
-  if (target < now) return 'Expired'
-  return formatDistanceToNow(target, { addSuffix: false })
+  
+  if (target < now) {
+    return 'Expired'
+  }
+  
+  // Format: "2 days left", "5 hours left"
+  const distance = formatDistanceToNow(target, { addSuffix: false })
+  return `${distance} left`
 }
 
 export function generateReferralCode(walletAddress: string): string {
