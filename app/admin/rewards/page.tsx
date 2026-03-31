@@ -139,7 +139,6 @@ export default function AdminRewards() {
       const creatorPool = mission.reward_pool * 0.60
       const perWinner = creatorPool / topEntries.length
 
-      // ✅ FIXED: TypeScript type cast added
       for (const entry of topEntries) {
         const { error } = await (supabase
           .from('submissions') as any)
@@ -168,7 +167,6 @@ export default function AdminRewards() {
 
   async function markAsPaid(submissionId: string, creatorId: string, amount: number) {
     try {
-      // ✅ FIXED: TypeScript type cast added
       const { error: subError } = await (supabase
         .from('submissions') as any)
         .update({ 
@@ -179,8 +177,9 @@ export default function AdminRewards() {
 
       if (subError) throw subError
 
-      const { error: rewardError } = await supabase
-        .from('rewards')
+      // ✅ FIXED: TypeScript type cast added for rewards insert
+      const { error: rewardError } = await (supabase
+        .from('rewards') as any)
         .insert({
           user_id: creatorId,
           mission_id: selectedMissionId,
