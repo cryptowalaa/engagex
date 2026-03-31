@@ -139,7 +139,6 @@ export default function AdminRewards() {
       const creatorPool = mission.reward_pool * 0.60
       const perWinner = creatorPool / topEntries.length
 
-      // ✅ FIXED: TypeScript type cast added
       for (const entry of topEntries) {
         const { error } = await (supabase
           .from('submissions') as any)
@@ -168,7 +167,6 @@ export default function AdminRewards() {
 
   async function markAsPaid(submissionId: string, creatorId: string, amount: number) {
     try {
-      // ✅ FIXED: TypeScript type cast added
       const { error: subError } = await (supabase
         .from('submissions') as any)
         .update({ 
@@ -179,8 +177,8 @@ export default function AdminRewards() {
 
       if (subError) throw subError
 
-      const { error: rewardError } = await supabase
-        .from('rewards')
+      const { error: rewardError } = await (supabase
+        .from('rewards') as any)
         .insert({
           user_id: creatorId,
           mission_id: selectedMissionId,
@@ -193,17 +191,23 @@ export default function AdminRewards() {
 
       if (rewardError) throw rewardError
 
-      // Update user total_earned
-      const { data: user } = await supabase
+      // ✅ FIXED: Proper null check for user
+      const { data: user, error: userError } = await supabase
         .from('users')
         .select('total_earned')
         .eq('id', creatorId)
         .single()
+
+      if (userError) throw userError
       
-      await (supabase
-        .from('users') as any)
-        .update({ total_earned: (user?.total_earned || 0) + amount })
-        .eq('id', creatorId)
+      // ✅ FIXED: Null check before update
+      if (user) {
+        const currentEarned = user.total_earned || 0
+        await (supabase
+          .from('users') as any)
+          .update({ total_earned: currentEarned + amount })
+          .eq('id', creatorId)
+      }
 
       toast.success(`Marked as paid: ${formatUSDC(amount)}`)
       
