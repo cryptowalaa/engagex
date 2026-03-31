@@ -9,6 +9,7 @@ import {
   Zap, Target, Trophy, Users, ArrowRight, 
   CheckCircle, TrendingUp, Shield, Star, ChevronRight 
 } from 'lucide-react'
+import Image from 'next/image'
 
 // Animated particle
 function Particle({ style }: { style: React.CSSProperties }) {
@@ -18,7 +19,6 @@ function Particle({ style }: { style: React.CSSProperties }) {
 export default function Home() {
   const { publicKey } = useWallet()
   const [particles, setParticles] = useState<React.CSSProperties[]>([])
-  const canvasRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const generated = Array.from({ length: 30 }, (_, i) => ({
@@ -79,7 +79,7 @@ export default function Home() {
     <div className="min-h-screen bg-brand-dark overflow-hidden">
       <Navbar />
 
-      {/* HERO SECTION — Animated like GoDark */}
+      {/* HERO SECTION */}
       <section className="relative min-h-screen flex items-center hero-bg grid-bg">
         {/* Particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -92,6 +92,23 @@ export default function Home() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20">
           <div className="max-w-4xl">
+            {/* Logo + Brand */}
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-16 h-16 rounded-2xl bg-brand-green flex items-center justify-center overflow-hidden">
+                <Image 
+                  src="/logo.PNG" 
+                  alt="EngageZ Logo" 
+                  width={64} 
+                  height={64}
+                  className="object-cover"
+                />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black text-white">EngageZ</h1>
+                <p className="text-brand-green text-sm">Web3 Engagement Platform</p>
+              </div>
+            </div>
+
             {/* Live badge */}
             <div className="inline-flex items-center gap-2 bg-brand-green/10 border border-brand-green/20 rounded-full px-4 py-1.5 mb-8">
               <span className="w-2 h-2 rounded-full bg-brand-green animate-pulse" />
@@ -161,7 +178,7 @@ export default function Home() {
       <section className="py-24 px-4 max-w-7xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-black mb-4">
-            Why <span className="gradient-text">EngageX</span>?
+            Why <span className="gradient-text">EngageZ</span>?
           </h2>
           <p className="text-gray-400 text-lg max-w-xl mx-auto">
             The complete gamified platform where attention becomes currency
