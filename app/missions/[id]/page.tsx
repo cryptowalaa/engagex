@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
-import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, CheckCircle, TrendingUp } from 'lucide-react'
+import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, CheckCircle, TrendingUp, Link as LinkIcon } from 'lucide-react'
 import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -23,6 +23,44 @@ const SCORE_WEIGHTS = {
   likes: 1,
   comments: 3,
   shares: 5
+}
+
+// Auto-detect URLs in text and make them clickable
+function LinkifyText({ text }: { text: string }) {
+  if (!text) return null
+  
+  // Regex to detect URLs (http, https, www)
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/g
+  
+  const parts = text.split(urlRegex)
+  
+  return (
+    <span className="whitespace-pre-wrap break-words">
+      {parts.map((part, i) => {
+        if (!part) return null
+        
+        // Check if part is a URL
+        if (part.match(/^https?:\/\//) || part.match(/^www\./)) {
+          const url = part.startsWith('www.') ? `https://${part}` : part
+          return (
+            <a 
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-green hover:underline break-all inline-flex items-center gap-1"
+            >
+              <LinkIcon size={12} />
+              {part.length > 40 ? part.substring(0, 40) + '...' : part}
+            </a>
+          )
+        }
+        
+        // Regular text - preserve newlines
+        return <span key={i}>{part}</span>
+      })}
+    </span>
+  )
 }
 
 export default function MissionDetailPage() {
@@ -48,7 +86,7 @@ export default function MissionDetailPage() {
     try {
       // Load mission with brand info including verified status
       const { data: m } = await (supabase.from('missions') as any)
-        .select('*, brand:users(id, username, wallet_address, is_verified, avatar_url)')
+        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url)')
         .eq('id', id)
         .single()
       setMission(m)
@@ -278,14 +316,22 @@ export default function MissionDetailPage() {
                     {mission.brand?.username?.[0]?.toUpperCase() || 'B'}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-white font-semibold">
                         {mission.brand?.username || shortenAddress(mission.brand?.wallet_address || '', 4)}
                       </p>
-                      {mission.brand?.is_verified && (
+                      {/* Green Verified Badge */}
+                      {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-1 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full">
                           <CheckCircle size={12} className="fill-current" />
                           Verified
+                        </span>
+                      )}
+                      {/* Yellow Official Badge */}
+                      {mission.brand?.is_official_verified && (
+                        <span className="flex items-center gap-1 text-xs bg-[#FFAD1F]/10 text-[#FFAD1F] border border-[#FFAD1F]/20 px-2 py-0.5 rounded-full">
+                          <span className="w-3 h-3 bg-[#FFAD1F] rounded-full flex items-center justify-center text-[8px] text-brand-dark font-bold">✓</span>
+                          Official
                         </span>
                       )}
                     </div>
@@ -298,11 +344,19 @@ export default function MissionDetailPage() {
                   <span className="text-xs text-gray-500">{mission.category}</span>
                 </div>
                 <h1 className="text-2xl font-black text-white mb-4">{mission.title}</h1>
-                <p className="text-gray-300 leading-relaxed mb-6">{mission.description}</p>
+                
+                {/* Description with proper formatting and clickable links */}
+                <div className="text-gray-300 leading-relaxed mb-6 space-y-4">
+                  <LinkifyText text={mission.description} />
+                </div>
+                
+                {/* Requirements with proper formatting */}
                 {mission.requirements && (
                   <div className="bg-brand-dark rounded-xl p-4 border border-brand-border">
-                    <h3 className="text-white font-semibold mb-2 text-sm">Requirements</h3>
-                    <p className="text-gray-400 text-sm">{mission.requirements}</p>
+                    <h3 className="text-white font-semibold mb-3 text-sm">Requirements</h3>
+                    <div className="text-gray-400 text-sm space-y-2">
+                      <LinkifyText text={mission.requirements} />
+                    </div>
                   </div>
                 )}
               </div>
