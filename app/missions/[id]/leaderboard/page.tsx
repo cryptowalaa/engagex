@@ -183,11 +183,13 @@ export default function MissionLeaderboardPage() {
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-brand-green/20 flex items-center justify-center text-brand-green font-bold">
-                              {entry.creator_username?.[0]?.toUpperCase() || 'C'}
+                              {/* ✅ FIXED: Safe access with fallback */}
+                              {entry.creator_username ? entry.creator_username[0].toUpperCase() : 'C'}
                             </div>
                             <div>
                               <p className="font-semibold text-white">
-                                {entry.creator_username || shortenAddress(entry.creator_wallet, 4)}
+                                {/* ✅ FIXED: Safe fallback for display name */}
+                                {entry.creator_username || (entry.creator_wallet ? shortenAddress(entry.creator_wallet, 4) : 'Unknown')}
                               </p>
                               <p className="text-xs text-gray-500 capitalize">{entry.platform}</p>
                             </div>
