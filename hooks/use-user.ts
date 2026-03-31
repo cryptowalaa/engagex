@@ -127,7 +127,7 @@ export function useUser() {
     isUser,
     connected, 
     updateUser, 
-    applyAsBrand,  // ✅ NEW
+    applyAsBrand,
     refetch: () => publicKey && loadOrCreateUser(publicKey.toBase58()) 
   }
 }
