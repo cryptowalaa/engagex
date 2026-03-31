@@ -202,7 +202,6 @@ export default function MissionsPage() {
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          // Fallback on error
                           ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                         }}
                         unoptimized
@@ -221,7 +220,7 @@ export default function MissionsPage() {
 
                   {/* Content */}
                   <div className="p-5">
-                    {/* Brand Info */}
+                    {/* Brand Info with BOTH Badges - CLICKABLE */}
                     <div className="flex items-center gap-2 mb-3">
                       <Link 
                         href={`/brand/${mission.brand?.id}`}
@@ -247,7 +246,7 @@ export default function MissionsPage() {
                         </span>
                       </Link>
                       
-                      {/* Verified Badges */}
+                      {/* Green Verified Badge (Approved brand) */}
                       {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-0.5 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-1.5 py-0.5 rounded">
                           <CheckCircle size={10} className="fill-current" />
@@ -255,6 +254,7 @@ export default function MissionsPage() {
                         </span>
                       )}
                       
+                      {/* Yellow Official Badge (Premium/Subscription) */}
                       {mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-1 text-xs">
                           <YellowTick size="sm" />
