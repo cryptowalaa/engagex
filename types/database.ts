@@ -21,9 +21,10 @@ export interface User {
   total_points: number
   referral_code: string | null
   referred_by: string | null
-  is_verified: boolean  // ✅ NEW: Verified badge for approved brands
-  brand_status: 'pending' | 'approved' | 'rejected' | null  // ✅ NEW: Brand application status
-  brand_submitted_at: string | null  // ✅ NEW: When brand applied
+  is_verified: boolean                    // 🟢 Green tick - Approved brand
+  is_official_verified: boolean            // 🟡 Yellow tick - Official/Premium brand (NEW)
+  brand_status: 'pending' | 'approved' | 'rejected' | null
+  brand_submitted_at: string | null
   created_at: string
   updated_at: string
 }
@@ -103,6 +104,15 @@ export interface Referral {
   created_at: string
 }
 
+export interface OfficialBrand {
+  id: string
+  user_id: string
+  verified_by: string
+  verification_note: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -117,6 +127,7 @@ export interface Database {
       }
       rewards: { Row: Reward; Insert: Partial<Reward>; Update: Partial<Reward> }
       referrals: { Row: Referral; Insert: Partial<Referral>; Update: Partial<Referral> }
+      official_brands: { Row: OfficialBrand; Insert: Partial<OfficialBrand>; Update: Partial<OfficialBrand> }
     }
   }
 }
