@@ -9,7 +9,7 @@ import { formatUSDC, timeUntil } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import Image from 'next/image'
 
-type MissionStatus = 'all' | 'active' | 'funded' | 'completed'
+type MissionStatus = 'all' | 'active' | 'funded' | 'completed' | 'expired'
 
 interface Mission {
   id: string
@@ -52,20 +52,50 @@ function YellowTick({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }) {
   )
 }
 
-// ✅ FIXED: Helper function to get correct image URL
+// Helper function to get correct image URL
 function getImageUrl(imageUrl: string | null): string {
   if (!imageUrl) return ''
   
-  // If already full URL, return as-is
   if (imageUrl.startsWith('http')) return imageUrl
   
-  // If it's a storage path, construct full URL
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   if (!supabaseUrl) return imageUrl
   
-  // Handle both with and without 'avatars/' prefix
   const cleanPath = imageUrl.replace(/^avatars\//, '')
   return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+}
+
+// ✅ NEW: Real-time status check - deadline vs database status
+function getMissionDisplayStatus(mission: Mission): { 
+  displayStatus: string
+  isExpired: boolean 
+  badgeColor: string 
+} {
+  const now = new Date()
+  const deadline = new Date(mission.deadline)
+  const isExpired = deadline < now
+  
+  if (isExpired) {
+    return { 
+      displayStatus: 'expired', 
+      isExpired: true, 
+      badgeColor: 'bg-red-500/90' 
+    }
+  }
+  
+  // Not expired - show actual database status
+  const statusColors: Record<string, string> = {
+    'active': 'bg-brand-green/90',
+    'funded': 'bg-blue-500/90',
+    'completed': 'bg-purple-500/90',
+    'pending': 'bg-yellow-500/90'
+  }
+  
+  return { 
+    displayStatus: mission.status, 
+    isExpired: false, 
+    badgeColor: statusColors[mission.status] || 'bg-gray-500/90'
+  }
 }
 
 export default function MissionsPage() {
@@ -85,12 +115,12 @@ export default function MissionsPage() {
 
   async function loadMissions() {
     try {
+      // ✅ FIXED: Sab missions fetch karo, sirf 'active' nahi
       const { data } = await (supabase.from('missions') as any)
         .select(`
           *,
           brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url)
         `)
-        .eq('status', 'active')
         .order('created_at', { ascending: false })
 
       setMissions(data || [])
@@ -112,9 +142,21 @@ export default function MissionsPage() {
       )
     }
 
-    // Status filter
+    // ✅ FIXED: Real-time expiry check ke saath filter
     if (activeFilter !== 'all') {
-      filtered = filtered.filter(m => m.status === activeFilter)
+      if (activeFilter === 'expired') {
+        // Sirf actually expired missions
+        filtered = filtered.filter(m => new Date(m.deadline) < new Date())
+      } else if (activeFilter === 'active') {
+        // Active status AND not expired
+        filtered = filtered.filter(m => {
+          const isExpired = new Date(m.deadline) < new Date()
+          return m.status === 'active' && !isExpired
+        })
+      } else {
+        // Other statuses ke liye database status check
+        filtered = filtered.filter(m => m.status === activeFilter)
+      }
     }
 
     setFilteredMissions(filtered)
@@ -123,6 +165,7 @@ export default function MissionsPage() {
   const filters: { label: string; value: MissionStatus }[] = [
     { label: 'All', value: 'all' },
     { label: 'Active', value: 'active' },
+    { label: 'Expired', value: 'expired' },  // ✅ NEW
     { label: 'Funded', value: 'funded' },
     { label: 'Completed', value: 'completed' },
   ]
@@ -155,7 +198,7 @@ export default function MissionsPage() {
                 className="w-full bg-brand-card border border-brand-border rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-green/50"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {filters.map((filter) => (
                 <button
                   key={filter.value}
@@ -187,111 +230,119 @@ export default function MissionsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredMissions.map((mission) => (
-                <Link
-                  key={mission.id}
-                  href={`/missions/${mission.id}`}
-                  className="group bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-green/30 transition-all duration-300 card-hover"
-                >
-                  {/* ✅ FIXED: Image with correct URL handling */}
-                  <div className="h-48 bg-brand-dark relative overflow-hidden">
-                    {mission.image_url ? (
-                      <Image
-                        src={getImageUrl(mission.image_url)}
-                        alt={mission.title}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          // Fallback on error
-                          ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                        }}
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-700">
-                        <Target size={48} />
-                      </div>
-                    )}
-                    <div className="absolute top-3 left-3">
-                      <span className="px-3 py-1 bg-brand-green/90 text-brand-dark text-xs font-bold rounded-full">
-                        {mission.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="p-5">
-                    {/* Brand Info */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <Link 
-                        href={`/brand/${mission.brand?.id}`}
-                        className="flex items-center gap-2 group/brand"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="w-6 h-6 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold group-hover/brand:scale-110 transition-transform overflow-hidden">
-                          {mission.brand?.avatar_url ? (
-                            <Image 
-                              src={getImageUrl(mission.brand.avatar_url)} 
-                              alt={mission.brand?.username || 'Brand'} 
-                              width={24} 
-                              height={24}
-                              className="object-cover w-full h-full"
-                              unoptimized
-                            />
-                          ) : (
-                            mission.brand?.username?.[0]?.toUpperCase() || 'B'
-                          )}
+              {filteredMissions.map((mission) => {
+                // ✅ FIXED: Real-time status calculation
+                const { displayStatus, isExpired, badgeColor } = getMissionDisplayStatus(mission)
+                
+                return (
+                  <Link
+                    key={mission.id}
+                    href={`/missions/${mission.id}`}
+                    className="group bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-green/30 transition-all duration-300 card-hover"
+                  >
+                    {/* Image */}
+                    <div className="h-48 bg-brand-dark relative overflow-hidden">
+                      {mission.image_url ? (
+                        <Image
+                          src={getImageUrl(mission.image_url)}
+                          alt={mission.title}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                          }}
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-700">
+                          <Target size={48} />
                         </div>
-                        <span className="text-sm text-gray-400 group-hover/brand:text-brand-green transition-colors">
-                          {mission.brand?.username || 'Anonymous'}
-                        </span>
-                      </Link>
-                      
-                      {/* Verified Badges */}
-                      {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
-                        <span className="flex items-center gap-0.5 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-1.5 py-0.5 rounded">
-                          <CheckCircle size={10} className="fill-current" />
-                          <span className="text-[10px]">Verified</span>
-                        </span>
                       )}
-                      
-                      {mission.brand?.is_official_verified && (
-                        <span className="flex items-center gap-1 text-xs">
-                          <YellowTick size="sm" />
-                          <span className="text-[#FFAD1F] font-semibold text-[10px]">Official</span>
+                      <div className="absolute top-3 left-3">
+                        {/* ✅ FIXED: Dynamic status badge */}
+                        <span className={`px-3 py-1 ${badgeColor} text-brand-dark text-xs font-bold rounded-full uppercase`}>
+                          {displayStatus}
                         </span>
-                      )}
-                    </div>
-
-                    <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 group-hover:text-brand-green transition-colors">
-                      {mission.title}
-                    </h3>
-                    <p className="text-gray-400 text-sm line-clamp-2 mb-4">
-                      {mission.description}
-                    </p>
-
-                    {/* Stats */}
-                    <div className="flex items-center justify-between pt-4 border-t border-brand-border">
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Reward Pool</p>
-                        <p className="text-brand-green font-black text-lg">
-                          {formatUSDC(mission.reward_pool)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 text-gray-500 text-xs mb-1">
-                          <Clock size={12} />
-                          {timeUntil(mission.deadline)}
-                        </div>
-                        <div className="flex items-center gap-1 text-gray-500 text-xs">
-                          <Users size={12} />
-                          Max {mission.max_winners} winners
-                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+
+                    {/* Content */}
+                    <div className="p-5">
+                      {/* Brand Info */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <Link 
+                          href={`/brand/${mission.brand?.id}`}
+                          className="flex items-center gap-2 group/brand"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="w-6 h-6 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold group-hover/brand:scale-110 transition-transform overflow-hidden">
+                            {mission.brand?.avatar_url ? (
+                              <Image 
+                                src={getImageUrl(mission.brand.avatar_url)} 
+                                alt={mission.brand?.username || 'Brand'} 
+                                width={24} 
+                                height={24}
+                                className="object-cover w-full h-full"
+                                unoptimized
+                              />
+                            ) : (
+                              mission.brand?.username?.[0]?.toUpperCase() || 'B'
+                            )}
+                          </div>
+                          <span className="text-sm text-gray-400 group-hover/brand:text-brand-green transition-colors">
+                            {mission.brand?.username || 'Anonymous'}
+                          </span>
+                        </Link>
+                        
+                        {/* Verified Badges */}
+                        {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
+                          <span className="flex items-center gap-0.5 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-1.5 py-0.5 rounded">
+                            <CheckCircle size={10} className="fill-current" />
+                            <span className="text-[10px]">Verified</span>
+                          </span>
+                        )}
+                        
+                        {mission.brand?.is_official_verified && (
+                          <span className="flex items-center gap-1 text-xs">
+                            <YellowTick size="sm" />
+                            <span className="text-[#FFAD1F] font-semibold text-[10px]">Official</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 group-hover:text-brand-green transition-colors">
+                        {mission.title}
+                      </h3>
+                      <p className="text-gray-400 text-sm line-clamp-2 mb-4">
+                        {mission.description}
+                      </p>
+
+                      {/* Stats */}
+                      <div className="flex items-center justify-between pt-4 border-t border-brand-border">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Reward Pool</p>
+                          <p className="text-brand-green font-black text-lg">
+                            {formatUSDC(mission.reward_pool)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          {/* ✅ FIXED: Red text for expired */}
+                          <div className={`flex items-center gap-1 text-xs mb-1 ${
+                            isExpired ? 'text-red-400' : 'text-gray-500'
+                          }`}>
+                            <Clock size={12} />
+                            {timeUntil(mission.deadline)}
+                          </div>
+                          <div className="flex items-center gap-1 text-gray-500 text-xs">
+                            <Users size={12} />
+                            Max {mission.max_winners} winners
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>
