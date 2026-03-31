@@ -2,9 +2,10 @@
 import Link from 'next/link'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { WalletButton } from '@/components/wallet/wallet-button'
-import { Zap, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { APP_CONFIG } from '@/lib/config'
+import Image from 'next/image'
 
 const navLinks = [
   { label: 'Missions', href: '/missions' },
@@ -21,11 +22,18 @@ export function Navbar() {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-brand-border bg-brand-dark/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
+          {/* Logo + Brand Name */}
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
-            <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center">
-              <Zap size={16} className="text-brand-dark" />
+            <div className="w-8 h-8 rounded-lg bg-brand-green flex items-center justify-center overflow-hidden">
+              <Image 
+                src="/logo.PNG" 
+                alt="EngageZ" 
+                width={32} 
+                height={32}
+                className="object-cover"
+              />
             </div>
-            <span className="gradient-text">EngageX</span>
+            <span className="gradient-text">EngageZ</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-6">
