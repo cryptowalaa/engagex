@@ -24,7 +24,28 @@ interface Mission {
     username: string | null
     wallet_address: string
     is_verified: boolean
+    is_official_verified: boolean  // ✅ NEW: Yellow tick
   } | null
+}
+
+// Yellow Tick Component (Twitter/X style)
+function YellowTick({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }) {
+  const sizeClasses = {
+    xs: 'w-3 h-3',
+    sm: 'w-3.5 h-3.5',
+    md: 'w-4 h-4'
+  }
+
+  return (
+    <span 
+      className={`inline-flex items-center justify-center ${sizeClasses[size]} bg-[#FFAD1F] rounded-full text-white`}
+      title="Official Verified Brand"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full p-[1.5px]">
+        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+      </svg>
+    </span>
+  )
 }
 
 export default function MissionsPage() {
@@ -47,7 +68,7 @@ export default function MissionsPage() {
       const { data } = await (supabase.from('missions') as any)
         .select(`
           *,
-          brand:users(id, username, wallet_address, is_verified)
+          brand:users(id, username, wallet_address, is_verified, is_official_verified)
         `)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -174,7 +195,7 @@ export default function MissionsPage() {
 
                   {/* Content */}
                   <div className="p-5">
-                    {/* Brand Info with Verified Badge */}
+                    {/* Brand Info with BOTH Badges */}
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-6 h-6 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold">
                         {mission.brand?.username?.[0]?.toUpperCase() || 'B'}
@@ -182,10 +203,20 @@ export default function MissionsPage() {
                       <span className="text-sm text-gray-400">
                         {mission.brand?.username || 'Anonymous'}
                       </span>
-                      {mission.brand?.is_verified && (
+                      
+                      {/* 🟢 Green Verified Badge (Approved brand) */}
+                      {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-0.5 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-1.5 py-0.5 rounded">
                           <CheckCircle size={10} className="fill-current" />
-                          Verified
+                          <span className="text-[10px]">Verified</span>
+                        </span>
+                      )}
+                      
+                      {/* 🟡 Yellow Official Badge (Premium/Subscription) */}
+                      {mission.brand?.is_official_verified && (
+                        <span className="flex items-center gap-1 text-xs">
+                          <YellowTick size="sm" />
+                          <span className="text-[#FFAD1F] font-semibold text-[10px]">Official</span>
                         </span>
                       )}
                     </div>
