@@ -7,7 +7,7 @@ import { Navbar } from '@/components/layout/navbar'
 import { 
   Shield, Users, Target, FileText, Trophy, Heart, MessageCircle, 
   Share2, Building2, CheckCircle, XCircle, Trash2, ExternalLink, 
-  Sparkles, Crown, Clock, Wallet, Check, Star
+  Sparkles, Crown, Clock, Wallet, Check, Star, ImageIcon, Upload
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import toast from 'react-hot-toast'
@@ -100,7 +100,7 @@ export default function AdminDashboard() {
           .eq('status', 'draft')
           .order('created_at', {ascending: false}),
         (supabase.from('users') as any).select('*').eq('brand_status', 'pending').order('brand_submitted_at', {ascending: false}),
-        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(10),
+        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(50),
         (supabase.from('badge_payments') as any)
           .select('*, user:users(username, wallet_address)')
           .order('created_at', {ascending: false})
@@ -261,6 +261,54 @@ export default function AdminDashboard() {
       await loadSubmissions()
     } catch (e: any) {
       toast.error(e.message || 'Failed to delete')
+    }
+  }
+
+  // Brand Logo Upload Functions
+  const handleLogoUpload = async (brandId: string, file: File | undefined | null) => {
+    if (!file) return
+    
+    try {
+      // Upload to Supabase Storage
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${brandId}-${Date.now()}.${fileExt}`
+      const filePath = `brand-logos/${fileName}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(filePath, file)
+      
+      if (uploadError) throw uploadError
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('logos')
+        .getPublicUrl(filePath)
+      
+      // Update user record
+      await (supabase.from('users') as any)
+        .update({ logo_url: publicUrl })
+        .eq('id', brandId)
+      
+      toast.success('Logo uploaded successfully!')
+      await load() // Reload data
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to upload logo')
+    }
+  }
+
+  const removeLogo = async (brandId: string) => {
+    if (!confirm('Remove this logo?')) return
+    
+    try {
+      await (supabase.from('users') as any)
+        .update({ logo_url: null })
+        .eq('id', brandId)
+      
+      toast.success('Logo removed!')
+      await load()
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to remove logo')
     }
   }
 
@@ -520,7 +568,6 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex gap-2">
-                              {/* Only approve if payment completed (has payment_tx) */}
                               {(m.payment_status === 'completed' || (m.payment_tx && m.payment_tx.length > 0)) ? (
                                 <button 
                                   onClick={() => approveMission(m.id)} 
@@ -630,6 +677,95 @@ export default function AdminDashboard() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* BRAND LOGO MANAGEMENT - NEW SECTION */}
+          <div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <ImageIcon size={20} className="text-blue-400"/>
+              Brand Logo Management
+              <span className="ml-2 text-xs bg-blue-400/10 text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded-full">
+                {users.filter((u: any) => u.role === 'brand' && u.is_verified).length} brands
+              </span>
+            </h2>
+            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-brand-border bg-blue-400/5">
+                <p className="text-sm text-blue-400">Upload logos for verified brands. Recommended size: 200x200px.</p>
+              </div>
+              
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {users
+                    .filter((u: any) => u.role === 'brand' && u.is_verified)
+                    .map((brand: any) => (
+                    <div key={brand.id} className="bg-brand-dark border border-brand-border rounded-xl p-4 hover:border-blue-400/30 transition-all">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center overflow-hidden border-2 border-brand-border">
+                          {brand.logo_url ? (
+                            <img 
+                              src={brand.logo_url} 
+                              alt={brand.username} 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xl font-bold text-white">
+                              {brand.username?.[0]?.toUpperCase() || 'B'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-white text-sm truncate">
+                            {brand.username || 'Unnamed Brand'}
+                          </p>
+                          <p className="text-xs text-gray-500 font-mono">
+                            {shortenAddress(brand.wallet_address, 6)}
+                          </p>
+                          {brand.is_official_verified && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#FFAD1F]/10 text-[#FFAD1F] px-1.5 py-0.5 rounded mt-1">
+                              <Crown size={8} /> Official
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleLogoUpload(brand.id, e.target.files?.[0])}
+                          className="hidden"
+                          id={`logo-${brand.id}`}
+                        />
+                        <label
+                          htmlFor={`logo-${brand.id}`}
+                          className="flex items-center justify-center gap-2 w-full py-2 bg-brand-purple/10 border border-brand-purple/20 text-brand-purple rounded-lg text-sm font-medium hover:bg-brand-purple/20 transition-all cursor-pointer"
+                        >
+                          <Upload size={14} />
+                          {brand.logo_url ? 'Update Logo' : 'Upload Logo'}
+                        </label>
+                        
+                        {brand.logo_url && (
+                          <button
+                            onClick={() => removeLogo(brand.id)}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/20 transition-all"
+                          >
+                            <Trash2 size={14} /> Remove Logo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {users.filter((u: any) => u.role === 'brand' && u.is_verified).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <ImageIcon size={48} className="mx-auto mb-3 text-gray-700" />
+                    <p>No verified brands found</p>
+                    <p className="text-sm mt-1">Approve brand applications first</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -773,7 +909,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
+                  {users.slice(0, 20).map(u => (
                     <tr key={u.id} className="border-b border-brand-border/40 hover:bg-white/5">
                       <td className="px-4 py-3 font-mono text-brand-green text-xs">
                         {shortenAddress(u.wallet_address, 6)}
