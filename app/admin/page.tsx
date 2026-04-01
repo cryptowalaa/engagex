@@ -7,7 +7,7 @@ import { Navbar } from '@/components/layout/navbar'
 import { 
   Shield, Users, Target, FileText, Trophy, Heart, MessageCircle, 
   Share2, Building2, CheckCircle, XCircle, Trash2, ExternalLink, 
-  Sparkles, Crown, ShieldCheck, Wallet, Clock, Search, Filter 
+  Sparkles, Crown, Clock, Wallet, Check, Star, Loader2
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import toast from 'react-hot-toast'
@@ -46,6 +46,12 @@ interface BadgePayment {
   }
 }
 
+interface MissionWithPayment extends Mission {
+  payment_status?: string
+  payment_tx?: string
+  paid_at?: string
+}
+
 export default function AdminDashboard() {
   const { publicKey } = useWallet()
   const [stats, setStats] = useState({ 
@@ -53,9 +59,10 @@ export default function AdminDashboard() {
     missions: 0, 
     submissions: 0, 
     pendingBrands: 0,
-    badgePayments: 0 
+    badgePayments: 0,
+    pendingPayments: 0
   })
-  const [pendingMissions, setPendingMissions] = useState<Mission[]>([])
+  const [pendingMissions, setPendingMissions] = useState<MissionWithPayment[]>([])
   const [pendingBrands, setPendingBrands] = useState<BrandApplication[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [submissions, setSubmissions] = useState<SubmissionWithEngagement[]>([])
@@ -72,43 +79,56 @@ export default function AdminDashboard() {
   }, [isAdmin])
 
   async function load() {
-    const [
-      {count: uc},
-      {count: mc},
-      {count: sc},
-      {count: bpc},
-      {data: pm},
-      {data: pb},
-      {data: us},
-      {data: bp}
-    ] = await Promise.all([
-      supabase.from('users').select('*', {count: 'exact', head: true}),
-      supabase.from('missions').select('*', {count: 'exact', head: true}),
-      supabase.from('submissions').select('*', {count: 'exact', head: true}),
-      supabase.from('badge_payments').select('*', {count: 'exact', head: true}),
-      supabase.from('missions').select('*').eq('status', 'draft').order('created_at', {ascending: false}),
-      (supabase.from('users') as any).select('*').eq('brand_status', 'pending').order('brand_submitted_at', {ascending: false}),
-      supabase.from('users').select('*').order('created_at', {ascending: false}).limit(10),
-      (supabase.from('badge_payments') as any)
-        .select('*, user:users(username, wallet_address)')
-        .order('created_at', {ascending: false})
-        .limit(50)
-    ])
-    
-    setStats({
-      users: uc || 0, 
-      missions: mc || 0, 
-      submissions: sc || 0,
-      pendingBrands: pb?.length || 0,
-      badgePayments: bpc || 0
-    })
-    setPendingMissions(pm || [])
-    setPendingBrands(pb || [])
-    setUsers(us || [])
-    setBadgePayments(bp || [])
-    
-    await loadSubmissions()
-    setLoading(false)
+    try {
+      const [
+        {count: uc},
+        {count: mc},
+        {count: sc},
+        {count: bpc},
+        {data: pm},
+        {data: pb},
+        {data: us},
+        {data: bp}
+      ] = await Promise.all([
+        supabase.from('users').select('*', {count: 'exact', head: true}),
+        supabase.from('missions').select('*', {count: 'exact', head: true}),
+        supabase.from('submissions').select('*', {count: 'exact', head: true}),
+        supabase.from('badge_payments').select('*', {count: 'exact', head: true}),
+        (supabase.from('missions') as any)
+          .select('*')
+          .in('status', ['draft', 'draft_pending_payment'])
+          .order('created_at', {ascending: false}),
+        (supabase.from('users') as any).select('*').eq('brand_status', 'pending').order('brand_submitted_at', {ascending: false}),
+        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(10),
+        (supabase.from('badge_payments') as any)
+          .select('*, user:users(username, wallet_address)')
+          .order('created_at', {ascending: false})
+          .limit(50)
+      ])
+      
+      // Count pending payments
+      const pendingPaymentCount = (pm || []).filter((m: any) => m.payment_status === 'pending' || m.status === 'draft_pending_payment').length
+      
+      setStats({
+        users: uc || 0, 
+        missions: mc || 0, 
+        submissions: sc || 0,
+        pendingBrands: pb?.length || 0,
+        badgePayments: bpc || 0,
+        pendingPayments: pendingPaymentCount
+      })
+      setPendingMissions(pm || [])
+      setPendingBrands(pb || [])
+      setUsers(us || [])
+      setBadgePayments(bp || [])
+      
+      await loadSubmissions()
+    } catch (error) {
+      console.error('Load error:', error)
+      toast.error('Failed to load admin data')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function loadSubmissions() {
@@ -157,15 +177,35 @@ export default function AdminDashboard() {
   }
 
   const approveMission = async (id: string) => { 
-    await (supabase.from('missions') as any).update({status: 'active'}).eq('id', id)
-    setPendingMissions(p => p.filter(m => m.id !== id))
-    toast.success('Mission approved!') 
+    try {
+      await (supabase.from('missions') as any)
+        .update({
+          status: 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+      
+      setPendingMissions(p => p.filter(m => m.id !== id))
+      toast.success('Mission approved and activated!') 
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to approve')
+    }
   }
 
   const rejectMission = async (id: string) => { 
-    await (supabase.from('missions') as any).update({status: 'cancelled'}).eq('id', id)
-    setPendingMissions(p => p.filter(m => m.id !== id))
-    toast.success('Mission rejected') 
+    try {
+      await (supabase.from('missions') as any)
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+      
+      setPendingMissions(p => p.filter(m => m.id !== id))
+      toast.success('Mission rejected') 
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to reject')
+    }
   }
 
   const deleteMission = async (id: string) => {
@@ -229,6 +269,43 @@ export default function AdminDashboard() {
 
   const totalBadgeRevenue = badgePayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
+  // Payment status badge
+  const PaymentStatusBadge = ({ mission }: { mission: MissionWithPayment }) => {
+    if (mission.payment_status === 'completed' || mission.status === 'draft') {
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-500/10 text-green-400 border border-green-400/20 w-fit">
+            <CheckCircle size={10} /> Paid
+          </span>
+          {mission.payment_tx && (
+            <a 
+              href={`https://solscan.io/tx/${mission.payment_tx}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-brand-purple hover:text-brand-green flex items-center gap-1"
+            >
+              View Tx <ExternalLink size={10} />
+            </a>
+          )}
+        </div>
+      )
+    }
+    
+    if (mission.payment_status === 'pending' || mission.status === 'draft_pending_payment') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+          <Clock size={10} /> Pending Payment
+        </span>
+      )
+    }
+    
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-red-500/10 text-red-400 border border-red-400/20">
+        <XCircle size={10} /> Not Paid
+      </span>
+    )
+  }
+
   if (!isAdmin) return (
     <div className="min-h-screen bg-brand-dark flex items-center justify-center">
       <Navbar />
@@ -261,18 +338,19 @@ export default function AdminDashboard() {
           </div>
           
           {loading ? (
-            <div className="grid grid-cols-5 gap-4">
-              {[...Array(5)].map((_, i) => (
+            <div className="grid grid-cols-6 gap-4">
+              {[...Array(6)].map((_, i) => (
                 <div key={i} className="h-28 bg-brand-card rounded-2xl animate-pulse border border-brand-border"/>
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
               {[
                 {label: 'Total Users', value: stats.users, icon: Users, color: 'text-blue-400'},
                 {label: 'Total Missions', value: stats.missions, icon: Target, color: 'text-brand-green'},
                 {label: 'Submissions', value: stats.submissions, icon: FileText, color: 'text-brand-purple'},
                 {label: 'Pending Brands', value: stats.pendingBrands, icon: Building2, color: 'text-yellow-400'},
+                {label: 'Pending Payments', value: stats.pendingPayments, icon: Clock, color: 'text-orange-400'},
                 {label: 'Badge Sales', value: `$${totalBadgeRevenue.toFixed(0)}`, icon: Sparkles, color: 'text-pink-400'},
               ].map(({label, value, icon: Icon, color}) => (
                 <div key={label} className="bg-brand-card border border-brand-border rounded-2xl p-5">
@@ -286,7 +364,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* ✅ NEW: Badge Payments Section */}
+          {/* Badge Payments Section */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
@@ -296,19 +374,6 @@ export default function AdminDashboard() {
                   {badgePayments.length} total
                 </span>
               </h2>
-              
-              <div className="flex items-center gap-2">
-                <Filter size={16} className="text-gray-400" />
-                <select 
-                  value={badgeFilter}
-                  onChange={(e) => setBadgeFilter(e.target.value as any)}
-                  className="bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-purple"
-                >
-                  <option value="all">All Badges</option>
-                  <option value="blue">Verified (Blue)</option>
-                  <option value="gold">Official (Gold)</option>
-                </select>
-              </div>
             </div>
 
             <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
@@ -316,7 +381,6 @@ export default function AdminDashboard() {
                 <div className="p-8 text-center text-gray-500">
                   <Sparkles size={48} className="mx-auto mb-4 text-gray-600" />
                   <p>No badge payments yet</p>
-                  <p className="text-xs mt-2">Payments will appear here when brands purchase verification</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -350,7 +414,7 @@ export default function AdminDashboard() {
                               {payment.badge_type === 'gold' ? (
                                 <><Crown size={12} /> OFFICIAL</>
                               ) : (
-                                <><ShieldCheck size={12} /> VERIFIED</>
+                                <><CheckCircle size={12} /> VERIFIED</>
                               )}
                             </div>
                           </td>
@@ -409,6 +473,84 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Pending Missions - WITH PAYMENT STATUS */}
+          <div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Target size={20} className="text-brand-green"/>
+              Pending Missions
+              {pendingMissions.length > 0 && (
+                <span className="ml-2 text-xs bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-2 py-0.5 rounded-full">
+                  {pendingMissions.length}
+                </span>
+              )}
+            </h2>
+            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+              {pendingMissions.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">All caught up!</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b border-brand-border">
+                      <tr>
+                        {['Mission', 'Brand', 'Pool', 'Payment Status', 'Actions'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-semibold uppercase">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingMissions.map(m => (
+                        <tr key={m.id} className="border-b border-brand-border/40 hover:bg-white/5">
+                          <td className="px-4 py-4">
+                            <p className="font-semibold text-white">{m.title}</p>
+                            <p className="text-xs text-gray-500 line-clamp-1">{m.description}</p>
+                          </td>
+                          <td className="px-4 py-4 text-gray-400 text-xs">
+                            {shortenAddress(m.brand_id, 6)}
+                          </td>
+                          <td className="px-4 py-4 font-bold text-brand-green">
+                            {m.reward_pool} {m.currency}
+                          </td>
+                          <td className="px-4 py-4">
+                            <PaymentStatusBadge mission={m} />
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex gap-2">
+                              {/* Only approve if payment completed */}
+                              {(m.payment_status === 'completed' || m.status === 'draft') ? (
+                                <button 
+                                  onClick={() => approveMission(m.id)} 
+                                  className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-3 py-1.5 rounded-lg font-semibold hover:bg-brand-green/20"
+                                >
+                                  <Check size={14} className="inline mr-1" /> Approve
+                                </button>
+                              ) : (
+                                <span className="text-xs text-gray-500 italic px-3 py-1.5 flex items-center gap-1">
+                                  <Clock size={12} /> Awaiting Payment
+                                </span>
+                              )}
+                              <button 
+                                onClick={() => rejectMission(m.id)} 
+                                className="text-xs bg-red-500/10 text-red-400 border border-red-400/20 px-3 py-1.5 rounded-lg font-semibold hover:bg-red-500/20"
+                              >
+                                <XCircle size={14} className="inline mr-1" /> Reject
+                              </button>
+                              <button 
+                                onClick={() => deleteMission(m.id)} 
+                                className="text-xs bg-gray-500/10 text-gray-400 border border-gray-400/20 px-3 py-1.5 rounded-lg font-semibold hover:bg-red-500/10 hover:text-red-400 hover:border-red-400/20"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Brand Applications */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -435,7 +577,7 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody>
                       {pendingBrands.map(brand => (
-                        <tr key={brand.id} className="border-b border-brand-border/40 hover:bg-white/2">
+                        <tr key={brand.id} className="border-b border-brand-border/40 hover:bg-white/5">
                           <td className="px-4 py-4 font-mono text-brand-green text-xs">
                             {shortenAddress(brand.wallet_address, 6)}
                           </td>
@@ -486,72 +628,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Pending Missions */}
-          <div>
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Target size={20} className="text-brand-green"/>
-              Pending Missions
-              {pendingMissions.length > 0 && (
-                <span className="ml-2 text-xs bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-2 py-0.5 rounded-full">
-                  {pendingMissions.length}
-                </span>
-              )}
-            </h2>
-            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
-              {pendingMissions.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">All caught up!</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="border-b border-brand-border">
-                    <tr>
-                      {['Mission', 'Brand', 'Pool', 'Actions'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-semibold uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingMissions.map(m => (
-                      <tr key={m.id} className="border-b border-brand-border/40">
-                        <td className="px-4 py-4">
-                          <p className="font-semibold text-white">{m.title}</p>
-                          <p className="text-xs text-gray-500 line-clamp-1">{m.description}</p>
-                        </td>
-                        <td className="px-4 py-4 text-gray-400 text-xs">
-                          {shortenAddress(m.brand_id, 6)}
-                        </td>
-                        <td className="px-4 py-4 font-bold text-brand-green">
-                          {m.reward_pool} {m.currency}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => approveMission(m.id)} 
-                              className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-3 py-1.5 rounded-lg font-semibold"
-                            >
-                              ✅ Approve
-                            </button>
-                            <button 
-                              onClick={() => rejectMission(m.id)} 
-                              className="text-xs bg-red-500/10 text-red-400 border border-red-400/20 px-3 py-1.5 rounded-lg font-semibold"
-                            >
-                              ❌ Reject
-                            </button>
-                            <button 
-                              onClick={() => deleteMission(m.id)} 
-                              className="text-xs bg-gray-500/10 text-gray-400 border border-gray-400/20 px-3 py-1.5 rounded-lg font-semibold hover:bg-red-500/10 hover:text-red-400 hover:border-red-400/20"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-
           {/* Top Submissions */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -573,7 +649,7 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody>
                       {submissions.map((sub, index) => (
-                        <tr key={sub.id} className="border-b border-brand-border/40 hover:bg-white/2">
+                        <tr key={sub.id} className="border-b border-brand-border/40 hover:bg-white/5">
                           <td className="px-4 py-3">
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                               index === 0 ? 'bg-yellow-500 text-black' : 
@@ -693,7 +769,7 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody>
                   {users.map(u => (
-                    <tr key={u.id} className="border-b border-brand-border/40 hover:bg-white/2">
+                    <tr key={u.id} className="border-b border-brand-border/40 hover:bg-white/5">
                       <td className="px-4 py-3 font-mono text-brand-green text-xs">
                         {shortenAddress(u.wallet_address, 6)}
                       </td>
@@ -721,7 +797,7 @@ export default function AdminDashboard() {
                               ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' 
                               : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                           }`}>
-                            {(u as any).badge_type === 'gold' ? <Crown size={10} /> : <ShieldCheck size={10} />}
+                            {(u as any).badge_type === 'gold' ? <Crown size={10} /> : <CheckCircle size={10} />}
                             {(u as any).badge_type === 'gold' ? 'Official' : 'Verified'}
                           </span>
                         )}
