@@ -7,7 +7,7 @@ import { Navbar } from '@/components/layout/navbar'
 import { 
   Shield, Users, Target, FileText, Trophy, Heart, MessageCircle, 
   Share2, Building2, CheckCircle, XCircle, Trash2, ExternalLink, 
-  Sparkles, Crown, Clock, Wallet, Check, Star
+  Sparkles, Crown, Clock, Wallet, Check, Star, ImageIcon, Link as LinkIcon
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import toast from 'react-hot-toast'
@@ -46,7 +46,6 @@ interface BadgePayment {
   }
 }
 
-// Extended mission type with payment fields
 interface MissionWithPayment extends Mission {
   payment_status?: string
   payment_tx?: string
@@ -71,6 +70,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [editingSubmission, setEditingSubmission] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ likes: 0, comments: 0, shares: 0, watch_time: 0 })
+  const [logoUrls, setLogoUrls] = useState<Record<string, string>>({})
   const [badgeFilter, setBadgeFilter] = useState<'all' | 'blue' | 'gold'>('all')
   const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet
 
@@ -100,14 +100,13 @@ export default function AdminDashboard() {
           .eq('status', 'draft')
           .order('created_at', {ascending: false}),
         (supabase.from('users') as any).select('*').eq('brand_status', 'pending').order('brand_submitted_at', {ascending: false}),
-        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(10),
+        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(50),
         (supabase.from('badge_payments') as any)
           .select('*, user:users(username, wallet_address)')
           .order('created_at', {ascending: false})
           .limit(50)
       ])
       
-      // Count pending payments
       const pendingPaymentCount = (pm || []).filter((m: any) => m.payment_status === 'pending').length
       
       setStats({
@@ -122,6 +121,12 @@ export default function AdminDashboard() {
       setPendingBrands(pb || [])
       setUsers(us || [])
       setBadgePayments(bp || [])
+      
+      const urls: Record<string, string> = {}
+      ;(us || []).forEach((u: any) => {
+        if (u.logo_url) urls[u.id] = u.logo_url
+      })
+      setLogoUrls(urls)
       
       await loadSubmissions()
     } catch (error) {
@@ -264,15 +269,46 @@ export default function AdminDashboard() {
     }
   }
 
+  const updateLogoUrl = async (brandId: string, url: string) => {
+    try {
+      await (supabase.from('users') as any)
+        .update({ logo_url: url })
+        .eq('id', brandId)
+      
+      setLogoUrls(prev => ({ ...prev, [brandId]: url }))
+      toast.success('Logo URL updated!')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update logo')
+    }
+  }
+
+  const removeLogo = async (brandId: string) => {
+    if (!confirm('Remove this logo URL?')) return
+    
+    try {
+      await (supabase.from('users') as any)
+        .update({ logo_url: null })
+        .eq('id', brandId)
+      
+      setLogoUrls(prev => {
+        const newUrls = { ...prev }
+        delete newUrls[brandId]
+        return newUrls
+      })
+      
+      toast.success('Logo removed!')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to remove logo')
+    }
+  }
+
   const filteredBadgePayments = badgePayments.filter(p => 
     badgeFilter === 'all' ? true : p.badge_type === badgeFilter
   )
 
   const totalBadgeRevenue = badgePayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
-  // Payment status badge component
   const PaymentStatusBadge = ({ mission }: { mission: MissionWithPayment }) => {
-    // Check if paid (either payment_status is completed, or has payment_tx)
     const isPaid = mission.payment_status === 'completed' || (mission.payment_tx && mission.payment_tx.length > 0)
     
     if (isPaid) {
@@ -295,7 +331,6 @@ export default function AdminDashboard() {
       )
     }
     
-    // Check if pending payment
     if (mission.payment_status === 'pending') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
@@ -379,6 +414,21 @@ export default function AdminDashboard() {
                   {badgePayments.length} total
                 </span>
               </h2>
+              <div className="flex gap-2">
+                {(['all', 'blue', 'gold'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setBadgeFilter(filter)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      badgeFilter === filter
+                        ? 'bg-brand-purple text-white'
+                        : 'bg-brand-card border border-brand-border text-gray-400 hover:border-brand-purple/30'
+                    }`}
+                  >
+                    {filter === 'all' ? 'All' : filter === 'blue' ? 'Verified' : 'Official'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
@@ -462,23 +512,10 @@ export default function AdminDashboard() {
                   </table>
                 </div>
               )}
-              
-              {filteredBadgePayments.length > 0 && (
-                <div className="p-4 border-t border-brand-border bg-brand-dark/30">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">
-                      Showing {filteredBadgePayments.length} of {badgePayments.length} payments
-                    </span>
-                    <span className="text-brand-green font-bold">
-                      Total Revenue: ${totalBadgeRevenue.toFixed(2)} USDC
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Pending Missions - WITH PAYMENT STATUS */}
+          {/* Pending Missions */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Target size={20} className="text-brand-green"/>
@@ -520,7 +557,6 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex gap-2">
-                              {/* Only approve if payment completed (has payment_tx) */}
                               {(m.payment_status === 'completed' || (m.payment_tx && m.payment_tx.length > 0)) ? (
                                 <button 
                                   onClick={() => approveMission(m.id)} 
@@ -630,6 +666,97 @@ export default function AdminDashboard() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Brand Logo Management */}
+          <div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <ImageIcon size={20} className="text-blue-400"/>
+              Brand Logo Management
+              <span className="ml-2 text-xs bg-blue-400/10 text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded-full">
+                {users.filter((u: any) => u.role === 'brand' && u.is_verified).length} brands
+              </span>
+            </h2>
+            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-brand-border bg-blue-400/5">
+                <p className="text-sm text-blue-400">
+                  Enter logo image URL manually (Imgur, Cloudinary, etc.). 
+                  No file upload - 100% safe for database.
+                </p>
+              </div>
+              
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {users
+                    .filter((u: any) => u.role === 'brand' && u.is_verified)
+                    .map((brand: any) => (
+                    <div key={brand.id} className="bg-brand-dark border border-brand-border rounded-xl p-4 hover:border-blue-400/30 transition-all">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center overflow-hidden border-2 border-brand-border flex-shrink-0">
+                          {logoUrls[brand.id] ? (
+                            <img 
+                              src={logoUrls[brand.id]} 
+                              alt={brand.username} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none'
+                              }}
+                            />
+                          ) : (
+                            <span className="text-2xl font-bold text-white">
+                              {brand.username?.[0]?.toUpperCase() || 'B'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-white text-sm truncate">
+                            {brand.username || 'Unnamed Brand'}
+                          </p>
+                          <p className="text-xs text-gray-500 font-mono">
+                            {shortenAddress(brand.wallet_address, 6)}
+                          </p>
+                          {brand.is_official_verified && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#FFAD1F]/10 text-[#FFAD1F] px-1.5 py-0.5 rounded mt-1">
+                              <Crown size={8} /> Official
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                          <input
+                            type="url"
+                            placeholder="https://i.imgur.com/..."
+                            defaultValue={logoUrls[brand.id] || ''}
+                            onBlur={(e) => updateLogoUrl(brand.id, e.target.value)}
+                            className="w-full bg-brand-card border border-brand-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 focus:border-blue-400/50 focus:outline-none"
+                          />
+                        </div>
+                        
+                        {logoUrls[brand.id] && (
+                          <button
+                            onClick={() => removeLogo(brand.id)}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/20 transition-all"
+                          >
+                            <Trash2 size={14} /> Remove Logo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {users.filter((u: any) => u.role === 'brand' && u.is_verified).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <ImageIcon size={48} className="mx-auto mb-3 text-gray-700" />
+                    <p>No verified brands found</p>
+                    <p className="text-sm mt-1">Approve brand applications first</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -773,7 +900,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
+                  {users.slice(0, 20).map(u => (
                     <tr key={u.id} className="border-b border-brand-border/40 hover:bg-white/5">
                       <td className="px-4 py-3 font-mono text-brand-green text-xs">
                         {shortenAddress(u.wallet_address, 6)}
