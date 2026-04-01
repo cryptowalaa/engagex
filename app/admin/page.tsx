@@ -7,7 +7,7 @@ import { Navbar } from '@/components/layout/navbar'
 import { 
   Shield, Users, Target, FileText, Trophy, Heart, MessageCircle, 
   Share2, Building2, CheckCircle, XCircle, Trash2, ExternalLink, 
-  Sparkles, Crown, Clock, Wallet, Check, Star, Loader2
+  Sparkles, Crown, Clock, Wallet, Check, Star
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import toast from 'react-hot-toast'
@@ -46,6 +46,7 @@ interface BadgePayment {
   }
 }
 
+// Extended mission type with payment fields
 interface MissionWithPayment extends Mission {
   payment_status?: string
   payment_tx?: string
@@ -96,7 +97,7 @@ export default function AdminDashboard() {
         supabase.from('badge_payments').select('*', {count: 'exact', head: true}),
         (supabase.from('missions') as any)
           .select('*')
-          .in('status', ['draft', 'draft_pending_payment'])
+          .eq('status', 'draft')
           .order('created_at', {ascending: false}),
         (supabase.from('users') as any).select('*').eq('brand_status', 'pending').order('brand_submitted_at', {ascending: false}),
         supabase.from('users').select('*').order('created_at', {ascending: false}).limit(10),
@@ -107,7 +108,7 @@ export default function AdminDashboard() {
       ])
       
       // Count pending payments
-      const pendingPaymentCount = (pm || []).filter((m: any) => m.payment_status === 'pending' || m.status === 'draft_pending_payment').length
+      const pendingPaymentCount = (pm || []).filter((m: any) => m.payment_status === 'pending').length
       
       setStats({
         users: uc || 0, 
@@ -269,9 +270,12 @@ export default function AdminDashboard() {
 
   const totalBadgeRevenue = badgePayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
-  // Payment status badge
+  // Payment status badge component
   const PaymentStatusBadge = ({ mission }: { mission: MissionWithPayment }) => {
-    if (mission.payment_status === 'completed' || mission.status === 'draft') {
+    // Check if paid (either payment_status is completed, or has payment_tx)
+    const isPaid = mission.payment_status === 'completed' || (mission.payment_tx && mission.payment_tx.length > 0)
+    
+    if (isPaid) {
       return (
         <div className="flex flex-col gap-1">
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-500/10 text-green-400 border border-green-400/20 w-fit">
@@ -291,7 +295,8 @@ export default function AdminDashboard() {
       )
     }
     
-    if (mission.payment_status === 'pending' || mission.status === 'draft_pending_payment') {
+    // Check if pending payment
+    if (mission.payment_status === 'pending') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
           <Clock size={10} /> Pending Payment
@@ -515,8 +520,8 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex gap-2">
-                              {/* Only approve if payment completed */}
-                              {(m.payment_status === 'completed' || m.status === 'draft') ? (
+                              {/* Only approve if payment completed (has payment_tx) */}
+                              {(m.payment_status === 'completed' || (m.payment_tx && m.payment_tx.length > 0)) ? (
                                 <button 
                                   onClick={() => approveMission(m.id)} 
                                   className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-3 py-1.5 rounded-lg font-semibold hover:bg-brand-green/20"
