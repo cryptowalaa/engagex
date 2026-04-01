@@ -19,6 +19,7 @@
     "@solana/wallet-adapter-base": "^0.9.23",
     "@solana/wallet-adapter-phantom": "^0.9.24",
     "@solana/wallet-adapter-solflare": "^0.6.28",
+    "@solana/spl-token": "^0.4.6",
     "@supabase/supabase-js": "^2.43.0",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.378.0",
