@@ -30,33 +30,62 @@ const BADGE_FEATURES = [
   'Early Access to Features'
 ]
 
-// EXACT Badge Icon Component - Like Screenshot
+// EXACT Badge Icon - Yellow rounded square with white checkmark (curved/rotated)
 const BadgeIcon = ({ size = 80 }: { size?: number }) => (
   <div 
     className="relative flex items-center justify-center"
     style={{ width: size, height: size }}
   >
     {/* Glow effect behind */}
-    <div className="absolute inset-0 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl blur-md opacity-60"></div>
+    <div 
+      className="absolute inset-0 rounded-2xl blur-lg opacity-50"
+      style={{ background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%)' }}
+    ></div>
     
-    {/* Main rounded square */}
-    <div className="relative w-full h-full rounded-2xl bg-gradient-to-br from-[#fbbf24] via-[#f59e0b] to-[#ea580c] flex items-center justify-center shadow-2xl">
-      {/* Gear icon - white */}
+    {/* Main rounded square - yellow gradient */}
+    <div 
+      className="relative w-full h-full rounded-2xl flex items-center justify-center shadow-2xl"
+      style={{ 
+        background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%)',
+        boxShadow: '0 10px 40px -10px rgba(245, 158, 11, 0.5)'
+      }}
+    >
+      {/* White checkmark - curved, rotated like screenshot */}
       <svg 
-        width={size * 0.5} 
-        height={size * 0.5} 
+        width={size * 0.45} 
+        height={size * 0.45} 
         viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="white" 
-        strokeWidth="2" 
-        strokeLinecap="round" 
-        strokeLinejoin="round"
+        fill="none"
+        style={{ transform: 'rotate(-10deg)' }}
       >
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        <path 
+          d="M20 6L9 17L4 12" 
+          stroke="white" 
+          strokeWidth="3" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+          fill="none"
+        />
       </svg>
     </div>
   </div>
+)
+
+// Small badge icon for text (like "Basic 🏅")
+const SmallBadgeIcon = () => (
+  <span 
+    className="inline-flex items-center justify-center w-5 h-5 rounded-md ml-1"
+    style={{ 
+      background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+      fontSize: '12px',
+      color: 'white',
+      fontWeight: 'bold'
+    }}
+  >
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ transform: 'rotate(-10deg)' }}>
+      <path d="M20 6L9 17L4 12" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  </span>
 )
 
 export default function CreateMission() {
@@ -292,13 +321,17 @@ export default function CreateMission() {
     if (userBadge && userBadge !== 'admin') {
       return (
         <div className="bg-[#0d1117] border border-[#30363d] rounded-2xl p-6 h-fit">
-          {/* EXACT Icon - Active state */}
+          {/* EXACT Icon - Yellow rounded square with checkmark */}
           <div className="flex justify-center mb-4">
             <BadgeIcon size={80} />
           </div>
           
+          {/* Official Brand with badge */}
           <div className="text-center mb-4">
-            <h3 className="text-xl font-bold text-white mb-1">Official Brand</h3>
+            <h3 className="text-xl font-bold text-white mb-1 flex items-center justify-center">
+              Official Brand
+              <SmallBadgeIcon />
+            </h3>
             <p className="text-xs text-gray-400">1 Year Access • Active</p>
           </div>
 
@@ -339,13 +372,17 @@ export default function CreateMission() {
     // NOT PURCHASED - Show Purchase Box with EXACT Icon
     return (
       <div className="bg-[#0d1117] border border-[#30363d] rounded-2xl p-6 h-fit">
-        {/* EXACT Icon like screenshot */}
+        {/* EXACT Icon like screenshot - Yellow rounded square with checkmark */}
         <div className="flex justify-center mb-4">
           <BadgeIcon size={80} />
         </div>
 
+        {/* Official Brand with badge */}
         <div className="text-center mb-4">
-          <h3 className="text-xl font-bold text-white mb-1">Official Brand</h3>
+          <h3 className="text-xl font-bold text-white mb-1 flex items-center justify-center">
+            Official Brand
+            <SmallBadgeIcon />
+          </h3>
           <p className="text-xs text-gray-400">1 Year Access • Optional</p>
         </div>
 
@@ -530,7 +567,6 @@ export default function CreateMission() {
                     <p>Mission starts as <strong>draft</strong>. Admin approves → send funds to treasury → becomes <strong>active</strong>. Winners paid at deadline.</p>
                   </div>
                   
-                  {/* BUTTON - Always enabled */}
                   <button 
                     onClick={handleSubmit} 
                     disabled={loading}
