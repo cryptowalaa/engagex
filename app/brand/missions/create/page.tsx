@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Navbar } from '@/components/layout/navbar'
-import { Target, Plus, ImageIcon, Shield, CheckCircle, Sparkles, Loader2, Crown, Star } from 'lucide-react'
+import { Target, Plus, ImageIcon, Crown, CheckCircle, Sparkles, Loader2, Star, Settings } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { MISSION_CATEGORIES } from '@/lib/config'
 import { PublicKey, Transaction } from '@solana/web3.js'
@@ -20,51 +20,14 @@ const TREASURY_WALLET = new PublicKey('A9GT8pYUR5F1oRwUsQ9ADeZTWq7LJMfmPQ3TZLmV6
 // Badge Price: 29 USDC (6 decimals)
 const BADGE_PRICE = 29 * 10**6
 
-interface BadgeOption {
-  type: 'blue' | 'gold'
-  name: string
-  price: number
-  duration: string
-  features: string[]
-  icon: any
-  gradient: string
-  shadow: string
-}
-
-const BADGES: BadgeOption[] = [
-  {
-    type: 'blue',
-    name: 'Verified Brand',
-    price: 29,
-    duration: '1 Year',
-    features: [
-      'Trust & Credibility Badge',
-      'Priority Mission Listing',
-      'Verified Profile Badge',
-      'Community Trust Score',
-      'Premium Support Access'
-    ],
-    icon: Shield,
-    gradient: 'from-blue-500 via-blue-600 to-blue-700',
-    shadow: 'shadow-blue-500/20'
-  },
-  {
-    type: 'gold',
-    name: 'Official Brand',
-    price: 29,
-    duration: '1 Year',
-    features: [
-      'Everything in Verified',
-      'Gold Badge on Profile',
-      'Featured in Leaderboard',
-      'Early Access to Features',
-      'Direct Admin Support',
-      'Marketing Boost Priority'
-    ],
-    icon: Crown,
-    gradient: 'from-yellow-400 via-yellow-500 to-yellow-600',
-    shadow: 'shadow-yellow-500/20'
-  }
+const BADGE_FEATURES = [
+  '✓ Trust & Credibility Badge',
+  '✓ Priority Mission Listing', 
+  '✓ Verified Profile Badge',
+  '✓ Community Trust Score',
+  '✓ Premium Support Access',
+  '✓ Featured in Leaderboard',
+  '✓ Early Access to Features'
 ]
 
 export default function CreateMission() {
@@ -73,7 +36,6 @@ export default function CreateMission() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [badgeLoading, setBadgeLoading] = useState(false)
-  const [selectedBadge, setSelectedBadge] = useState<'blue' | 'gold' | null>(null)
   const [userBadge, setUserBadge] = useState<string | null>(null)
   const [checkingBadge, setCheckingBadge] = useState(true)
   
@@ -110,7 +72,7 @@ export default function CreateMission() {
     }
   }
 
-  const purchaseBadge = async (badgeType: 'blue' | 'gold') => {
+  const purchaseBadge = async () => {
     if (!publicKey || !signTransaction) {
       toast.error('Please connect your wallet first')
       return
@@ -190,7 +152,7 @@ export default function CreateMission() {
 
       await (supabase.from('users') as any)
         .update({
-          badge_type: badgeType,
+          badge_type: 'gold',
           badge_purchased_at: new Date().toISOString(),
           badge_payment_tx: signature,
           is_verified: true,
@@ -201,7 +163,7 @@ export default function CreateMission() {
       await (supabase.from('badge_payments') as any)
         .insert({
           user_id: user.id,
-          badge_type: badgeType,
+          badge_type: 'gold',
           amount: 29.00,
           currency: 'USDC',
           transaction_signature: signature,
@@ -211,14 +173,13 @@ export default function CreateMission() {
 
       toast.success(
         <div className="flex flex-col gap-1">
-          <span className="font-bold">🎉 {badgeType === 'gold' ? 'Official' : 'Verified'} Brand Badge Active!</span>
+          <span className="font-bold">🎉 Official Brand Badge Active!</span>
           <span className="text-xs">Transaction: {signature.slice(0, 20)}...</span>
         </div>,
         { id: toastId, duration: 5000 }
       )
       
-      setUserBadge(badgeType)
-      setSelectedBadge(null)
+      setUserBadge('gold')
 
     } catch (error: any) {
       console.error('Badge purchase error:', error)
@@ -232,11 +193,6 @@ export default function CreateMission() {
     if (!publicKey) return toast.error('Connect wallet first')
     if (!form.title || !form.description || !form.reward_pool || !form.deadline)
       return toast.error('Fill all required fields')
-    
-    if (!userBadge) {
-      toast.error('Please purchase a Verified Brand badge first!')
-      return
-    }
 
     setLoading(true)
     try {
@@ -291,43 +247,42 @@ export default function CreateMission() {
     }
   }
 
-  const BadgeSection = () => {
+  // Yellow Badge Box Component - RIGHT SIDE
+  const BadgeBox = () => {
     if (checkingBadge) {
       return (
-        <div className="mb-8 p-6 bg-brand-card border border-brand-border rounded-2xl">
+        <div className="bg-brand-card border border-brand-border rounded-2xl p-6 h-fit">
           <div className="flex items-center justify-center gap-3 text-gray-400">
             <Loader2 size={20} className="animate-spin" />
-            <span>Checking verification status...</span>
+            <span>Checking...</span>
           </div>
         </div>
       )
     }
 
     if (userBadge && userBadge !== 'admin') {
-      const isGold = userBadge === 'gold'
       return (
-        <div className={`mb-8 p-6 rounded-2xl border ${
-          isGold 
-            ? 'bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500/30' 
-            : 'bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500/30'
-        }`}>
-          <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-              isGold ? 'bg-yellow-500/20' : 'bg-blue-500/20'
-            }`}>
-              {isGold ? <Crown size={32} className="text-yellow-400" /> : <Shield size={32} className="text-blue-400" />}
+        <div className="bg-gradient-to-br from-yellow-500/10 via-yellow-600/10 to-yellow-700/10 border border-yellow-500/30 rounded-2xl p-6 h-fit">
+          <div className="flex items-center gap-3 mb-4">
+            {/* EXACT ICON like screenshot - Settings/Gear with yellow gradient */}
+            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-500/30">
+              <Settings size={32} className="text-white" />
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <h3 className={`text-xl font-bold ${isGold ? 'text-yellow-400' : 'text-blue-400'}`}>
-                  {isGold ? '⭐ Official Brand' : '✓ Verified Brand'}
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-brand-green/20 text-brand-green border border-brand-green/30">
-                  ACTIVE
-                </span>
+            <div>
+              <h3 className="text-lg font-bold text-yellow-400">⭐ Official Brand</h3>
+              <p className="text-xs text-gray-400">Active • 1 Year</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {BADGE_FEATURES.slice(0, 4).map((feature, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-xs text-gray-300">
+                <CheckCircle size={12} className="text-yellow-400" />
+                {feature.replace('✓ ', '')}
               </div>
-              <p className="text-gray-400 text-sm">You have full access to create missions and manage campaigns</p>
-            </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t border-yellow-500/20">
+            <span className="text-xs text-yellow-400 font-medium">✓ Verified & Active</span>
           </div>
         </div>
       )
@@ -335,114 +290,67 @@ export default function CreateMission() {
 
     if (userBadge === 'admin') {
       return (
-        <div className="mb-8 p-6 rounded-2xl border bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-purple-500/20">
+        <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-6 h-fit">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-16 h-16 rounded-xl bg-purple-500/20 flex items-center justify-center">
               <Star size={32} className="text-purple-400" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-purple-400">Admin Access</h3>
-              <p className="text-gray-400 text-sm">Unlimited mission creation enabled</p>
+              <h3 className="text-lg font-bold text-purple-400">Admin Access</h3>
+              <p className="text-xs text-gray-400">Unlimited</p>
             </div>
           </div>
         </div>
       )
     }
 
+    // NOT PURCHASED - Show Purchase Box (OPTIONAL - not required)
     return (
-      <div className="mb-8 space-y-6">
-        <div className="text-center space-y-2">
-          <h3 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
-            <Sparkles className="text-brand-green" size={24} />
-            Upgrade to Verified Brand
-          </h3>
-          <p className="text-gray-400 max-w-lg mx-auto">
-            Purchase a verification badge to unlock mission creation and build trust with creators. 
-            One-time payment of <span className="text-brand-green font-bold">$29 USDC</span>.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {BADGES.map((badge) => {
-            const Icon = badge.icon
-            const isSelected = selectedBadge === badge.type
-            
-            return (
-              <div 
-                key={badge.type}
-                onClick={() => setSelectedBadge(badge.type)}
-                className={`relative cursor-pointer rounded-2xl p-6 border-2 transition-all duration-300 ${
-                  isSelected
-                    ? `border-brand-green bg-brand-green/5 ${badge.shadow}`
-                    : 'border-brand-border bg-brand-card hover:border-gray-600 hover:scale-[1.02]'
-                }`}
-              >
-                <div className={`absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br ${badge.gradient} flex items-center justify-center shadow-lg ${badge.shadow}`}>
-                  <Icon size={32} className="text-white" />
-                </div>
-                
-                <div className="mb-6 pt-4">
-                  <h4 className="text-2xl font-bold text-white mb-2">{badge.name}</h4>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black text-brand-green">${badge.price}</span>
-                    <span className="text-gray-500">/ {badge.duration}</span>
-                  </div>
-                </div>
-
-                <ul className="space-y-3 mb-6">
-                  {badge.features.map((feature, idx) => (
-                    <li key={idx} className="text-sm text-gray-300 flex items-center gap-3">
-                      <CheckCircle size={16} className={badge.type === 'gold' ? 'text-yellow-400 flex-shrink-0' : 'text-blue-400 flex-shrink-0'} />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                {isSelected && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      purchaseBadge(badge.type)
-                    }}
-                    disabled={badgeLoading}
-                    className={`w-full bg-gradient-to-r ${badge.gradient} text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50 shadow-lg ${badge.shadow}`}
-                  >
-                    {badgeLoading ? (
-                      <>
-                        <Loader2 size={20} className="animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={20} />
-                        Purchase {badge.name}
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {!isSelected && (
-                  <div className="w-full py-4 rounded-xl border border-dashed border-gray-600 text-gray-500 text-center text-sm font-medium">
-                    Click to select
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="bg-brand-dark/50 border border-brand-border rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <Shield size={18} className="text-brand-green mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-gray-400 space-y-1">
-              <p className="font-semibold text-gray-300">Secure Payment via Solana</p>
-              <p>• Single transaction - No recurring fees</p>
-              <p>• Funds sent directly to treasury wallet</p>
-              <p>• Badge activates instantly after confirmation</p>
-              <p>• No Phantom warnings - Clean transaction</p>
-            </div>
+      <div className="bg-brand-card border border-brand-border rounded-2xl p-6 h-fit">
+        <div className="text-center mb-6">
+          {/* EXACT ICON like screenshot */}
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg shadow-yellow-500/30 mb-4">
+            <Settings size={40} className="text-white" />
           </div>
+          <h3 className="text-xl font-bold text-white mb-1">Official Brand</h3>
+          <p className="text-xs text-gray-400">1 Year Access • Optional</p>
         </div>
+
+        <div className="text-center mb-6">
+          <span className="text-4xl font-black text-brand-green">$29</span>
+          <span className="text-gray-500 text-sm"> USDC</span>
+        </div>
+
+        <ul className="space-y-3 mb-6">
+          {BADGE_FEATURES.map((feature, idx) => (
+            <li key={idx} className="text-xs text-gray-300 flex items-center gap-2">
+              <CheckCircle size={14} className="text-yellow-400 flex-shrink-0" />
+              {feature.replace('✓ ', '')}
+            </li>
+          ))}
+        </ul>
+
+        <button
+          onClick={purchaseBadge}
+          disabled={badgeLoading}
+          className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-brand-dark font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-yellow-500/20"
+        >
+          {badgeLoading ? (
+            <>
+              <Loader2 size={18} className="animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Sparkles size={18} />
+              Purchase Badge
+            </>
+          )}
+        </button>
+
+        <p className="text-xs text-gray-500 text-center mt-4">
+          Optional • Secure payment via Solana
+        </p>
       </div>
     )
   }
@@ -453,7 +361,7 @@ export default function CreateMission() {
       <div className="flex pt-16">
         <Sidebar />
         <main className="flex-1 p-6 lg:p-8">
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="mb-8">
               <h1 className="text-3xl font-black mb-2 flex items-center gap-3">
                 <Target size={32} className="text-brand-green" />
@@ -462,17 +370,13 @@ export default function CreateMission() {
               <p className="text-gray-400">Launch an attention campaign with a reward pool</p>
             </div>
             
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-8 space-y-6">
+            {/* TWO COLUMN LAYOUT */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
-              <BadgeSection />
-
-              <div className="border-t border-brand-border pt-6">
-                <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                  <Target size={18} className="text-brand-green" />
-                  Mission Details
-                </h4>
-
-                <div className="space-y-5">
+              {/* LEFT COLUMN - Original Form (unchanged) */}
+              <div className="lg:col-span-2">
+                <div className="bg-brand-card border border-brand-border rounded-2xl p-8 space-y-5">
+                  
                   <div>
                     <label className="text-sm text-gray-400 font-semibold block mb-2 flex items-center gap-2">
                       <ImageIcon size={14} /> Mission Image URL
@@ -591,20 +495,25 @@ export default function CreateMission() {
                     <p>Mission starts as <strong>draft</strong>. Admin approves → send funds to treasury → becomes <strong>active</strong>. Winners paid at deadline.</p>
                   </div>
                   
+                  {/* BUTTON - Always enabled, badge is OPTIONAL */}
                   <button 
                     onClick={handleSubmit} 
-                    disabled={loading || !userBadge}
-                    className={`w-full font-black py-4 rounded-xl flex items-center justify-center gap-2 transition-all text-lg ${
-                      userBadge 
-                        ? 'bg-brand-green text-brand-dark hover:bg-opacity-90 hover:shadow-[0_0_25px_rgba(0,255,136,0.4)]' 
-                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                    }`}
+                    disabled={loading}
+                    className="w-full bg-brand-green text-brand-dark font-black py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 hover:shadow-[0_0_25px_rgba(0,255,136,0.4)] transition-all disabled:opacity-50 text-lg"
                   >
                     <Plus size={20} />
-                    {loading ? 'Creating...' : !userBadge ? 'Purchase Badge First' : 'Create Mission'}
+                    {loading ? 'Creating...' : 'Create Mission'}
                   </button>
                 </div>
               </div>
+
+              {/* RIGHT COLUMN - Yellow Badge Box (Optional) */}
+              <div className="lg:col-span-1">
+                <div className="sticky top-24">
+                  <BadgeBox />
+                </div>
+              </div>
+
             </div>
           </div>
         </main>
