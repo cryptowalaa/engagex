@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { Search, Clock, Users, CheckCircle, Target } from 'lucide-react'
+import { supabase } from '@/lib/supabase/client'
 import { formatUSDC, timeUntil } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -29,6 +29,7 @@ interface Mission {
     is_verified: boolean
     is_official_verified: boolean
     avatar_url: string | null
+    logo_url: string | null
   } | null
 }
 
@@ -52,7 +53,7 @@ function YellowTick({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }) {
   )
 }
 
-// ✅ FIXED: Helper function to get correct image URL
+// Helper function to get correct image URL
 function getImageUrl(imageUrl: string | null): string {
   if (!imageUrl) return ''
   
@@ -66,6 +67,28 @@ function getImageUrl(imageUrl: string | null): string {
   // Handle both with and without 'avatars/' prefix
   const cleanPath = imageUrl.replace(/^avatars\//, '')
   return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+}
+
+// Avatar component with error handling
+function AvatarImage({ url, name, size = 24 }: { url: string | null, name: string | null, size?: number }) {
+  const [error, setError] = useState(false)
+  
+  if (!url || error) {
+    return (
+      <span className="text-xs font-bold text-white flex items-center justify-center w-full h-full">
+        {name?.[0]?.toUpperCase() || 'B'}
+      </span>
+    )
+  }
+  
+  return (
+    <img 
+      src={url.startsWith('http') ? url : getImageUrl(url)} 
+      alt={name || 'Brand'} 
+      className="object-cover w-full h-full"
+      onError={() => setError(true)}
+    />
+  )
 }
 
 export default function MissionsPage() {
@@ -88,7 +111,7 @@ export default function MissionsPage() {
       const { data } = await (supabase.from('missions') as any)
         .select(`
           *,
-          brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url)
+          brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url, logo_url)
         `)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -193,7 +216,7 @@ export default function MissionsPage() {
                   href={`/missions/${mission.id}`}
                   className="group bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-green/30 transition-all duration-300 card-hover"
                 >
-                  {/* ✅ FIXED: Image with correct URL handling */}
+                  {/* Image */}
                   <div className="h-48 bg-brand-dark relative overflow-hidden">
                     {mission.image_url ? (
                       <Image
@@ -202,7 +225,6 @@ export default function MissionsPage() {
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
-                          // Fallback on error
                           ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                         }}
                         unoptimized
@@ -221,7 +243,7 @@ export default function MissionsPage() {
 
                   {/* Content */}
                   <div className="p-5">
-                    {/* Brand Info */}
+                    {/* Brand Info - FIXED WITH AVATAR */}
                     <div className="flex items-center gap-2 mb-3">
                       <Link 
                         href={`/brand/${mission.brand?.id}`}
@@ -229,18 +251,11 @@ export default function MissionsPage() {
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="w-6 h-6 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold group-hover/brand:scale-110 transition-transform overflow-hidden">
-                          {mission.brand?.avatar_url ? (
-                            <Image 
-                              src={getImageUrl(mission.brand.avatar_url)} 
-                              alt={mission.brand?.username || 'Brand'} 
-                              width={24} 
-                              height={24}
-                              className="object-cover w-full h-full"
-                              unoptimized
-                            />
-                          ) : (
-                            mission.brand?.username?.[0]?.toUpperCase() || 'B'
-                          )}
+                          <AvatarImage 
+                            url={mission.brand?.logo_url || mission.brand?.avatar_url} 
+                            name={mission.brand?.username} 
+                            size={24} 
+                          />
                         </div>
                         <span className="text-sm text-gray-400 group-hover/brand:text-brand-green transition-colors">
                           {mission.brand?.username || 'Anonymous'}
