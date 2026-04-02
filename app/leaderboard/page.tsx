@@ -10,6 +10,7 @@ interface Engager {
   id: string
   wallet_address: string
   username: string | null
+  avatar_url: string | null
   total_points: number
   role: string
 }
@@ -18,8 +19,31 @@ interface Creator {
   id: string
   wallet_address: string
   username: string | null
+  avatar_url: string | null
   total_earned: number
   role: string
+}
+
+// Avatar component with error handling
+function AvatarImage({ url, name, size = 32 }: { url: string | null, name: string | null, size?: number }) {
+  const [error, setError] = useState(false)
+  
+  if (!url || error) {
+    return (
+      <span className="text-sm font-bold text-white flex items-center justify-center w-full h-full">
+        {name?.[0]?.toUpperCase() || 'U'}
+      </span>
+    )
+  }
+  
+  return (
+    <img 
+      src={url} 
+      alt={name || 'User'} 
+      className="object-cover w-full h-full"
+      onError={() => setError(true)}
+    />
+  )
 }
 
 export default function LeaderboardPage() {
@@ -32,13 +56,13 @@ export default function LeaderboardPage() {
     async function load() {
       // Load top engagers (by total_points)
       const { data: eData } = await (supabase.from('users') as any)
-        .select('*')
+        .select('id, wallet_address, username, avatar_url, total_points, role')
         .order('total_points', { ascending: false })
         .limit(50)
       
       // Load top creators (by total_earned)
       const { data: cData } = await (supabase.from('users') as any)
-        .select('*')
+        .select('id, wallet_address, username, avatar_url, total_earned, role')
         .order('total_earned', { ascending: false })
         .limit(50)
       
@@ -127,8 +151,8 @@ export default function LeaderboardPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-gray-400">
-                            {user.username?.[0]?.toUpperCase() || 'U'}
+                          <div className="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center overflow-hidden">
+                            <AvatarImage url={user.avatar_url} name={user.username} size={32} />
                           </div>
                           <div>
                             <p className="font-semibold text-white">{user.username || 'Anonymous'}</p>
@@ -182,8 +206,8 @@ export default function LeaderboardPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-brand-green/20 flex items-center justify-center text-xs font-bold text-brand-green">
-                            {user.username?.[0]?.toUpperCase() || 'C'}
+                          <div className="w-8 h-8 rounded-full bg-brand-green/20 flex items-center justify-center overflow-hidden">
+                            <AvatarImage url={user.avatar_url} name={user.username} size={32} />
                           </div>
                           <div>
                             <p className="font-semibold text-white">{user.username || 'Anonymous'}</p>
