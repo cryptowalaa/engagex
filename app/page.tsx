@@ -33,22 +33,25 @@ interface TopCreator {
   total_points: number
 }
 
-interface TopBrand {
+interface FeaturedBrand {
   id: string
-  username: string | null
-  logo_url: string | null
-  wallet_address: string
-  is_verified: boolean
-  is_official_verified: boolean
-  missions_count: number
-  total_reward_pool: number
+  brand_id: string
+  display_order: number
+  brand: {
+    id: string
+    username: string | null
+    logo_url: string | null
+    wallet_address: string
+    is_verified: boolean
+    is_official_verified: boolean
+  }
 }
 
 export default function Home() {
   const { publicKey } = useWallet()
   const [particles, setParticles] = useState<React.CSSProperties[]>([])
   const [topCreators, setTopCreators] = useState<TopCreator[]>([])
-  const [topBrands, setTopBrands] = useState<TopBrand[]>([])
+  const [featuredBrands, setFeaturedBrands] = useState<FeaturedBrand[]>([])
   const [selectedCreator, setSelectedCreator] = useState<TopCreator | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -66,12 +69,11 @@ export default function Home() {
     setParticles(generated)
     
     loadTopCreators()
-    loadTopBrands()
+    loadFeaturedBrands()
   }, [])
 
   async function loadTopCreators() {
     try {
-      // Get top creators by total_earned
       const { data } = await (supabase.from('users') as any)
         .select('id, wallet_address, username, avatar_url, bio, twitter_handle, discord_handle, total_earned, total_points')
         .order('total_earned', { ascending: false })
@@ -85,50 +87,23 @@ export default function Home() {
     }
   }
 
-  async function loadTopBrands() {
+  async function loadFeaturedBrands() {
     try {
-      // Get brands with mission counts
-      const { data: brands } = await (supabase.from('users') as any)
-        .select('id, username, logo_url, wallet_address, is_verified, is_official_verified')
-        .eq('role', 'brand')
-        .eq('is_verified', true)
-        .limit(20)
+      // Load ONLY featured brands (admin selected)
+      const { data } = await (supabase.from('featured_brands') as any)
+        .select(`
+          id,
+          brand_id,
+          display_order,
+          brand:users(id, username, logo_url, wallet_address, is_verified, is_official_verified)
+        `)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+        .limit(10)
       
-      if (!brands) {
-        setTopBrands([])
-        return
-      }
-
-      // Get mission counts for each brand
-      const brandsWithStats = await Promise.all(
-        brands.map(async (brand: any) => {
-          const { count } = await (supabase.from('missions') as any)
-            .select('*', { count: 'exact', head: true })
-            .eq('brand_id', brand.id)
-            .eq('status', 'active')
-          
-          const { data: missions } = await (supabase.from('missions') as any)
-            .select('reward_pool')
-            .eq('brand_id', brand.id)
-          
-          const totalPool = missions?.reduce((sum: number, m: any) => sum + (m.reward_pool || 0), 0) || 0
-          
-          return {
-            ...brand,
-            missions_count: count || 0,
-            total_reward_pool: totalPool
-          }
-        })
-      )
-      
-      // Sort by missions count and total pool
-      const sorted = brandsWithStats
-        .sort((a, b) => (b.missions_count + b.total_reward_pool) - (a.missions_count + a.total_reward_pool))
-        .slice(0, 10)
-      
-      setTopBrands(sorted)
+      setFeaturedBrands(data || [])
     } catch (error) {
-      console.error('Load brands error:', error)
+      console.error('Load featured brands error:', error)
     }
   }
 
@@ -179,24 +154,20 @@ export default function Home() {
 
       {/* HERO SECTION */}
       <section className="relative min-h-screen flex items-center hero-bg grid-bg">
-        {/* Particles */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {particles.map((p, i) => <Particle key={i} style={p} />)}
         </div>
 
-        {/* Glowing orbs */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-brand-green/8 blur-3xl animate-pulse-slow pointer-events-none" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-brand-purple/8 blur-3xl animate-pulse-slow pointer-events-none" style={{ animationDelay: '2s' }} />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20">
           <div className="max-w-4xl">
-            {/* Live badge */}
             <div className="inline-flex items-center gap-2 bg-brand-green/10 border border-brand-green/20 rounded-full px-4 py-1.5 mb-8">
               <span className="w-2 h-2 rounded-full bg-brand-green animate-pulse" />
               <span className="text-brand-green text-sm font-medium">LIVE ON SOLANA MAINNET</span>
             </div>
 
-            {/* Hero headline */}
             <h1 className="text-6xl md:text-7xl lg:text-8xl font-black tracking-tight leading-none mb-6">
               <span className="text-white">The Attention</span>
               <br />
@@ -211,7 +182,6 @@ export default function Home() {
               <br />Powered by on-chain scoring on Solana.
             </p>
 
-            {/* Tag pills */}
             <div className="flex flex-wrap gap-3 mb-10">
               {['Instant Payouts', 'Auto-Scoring', 'Referral Rewards'].map(tag => (
                 <span key={tag} className="text-sm text-gray-400 border border-brand-border rounded-full px-4 py-1.5">
@@ -220,7 +190,6 @@ export default function Home() {
               ))}
             </div>
 
-            {/* CTAs */}
             <div className="flex flex-wrap gap-4 items-center">
               {publicKey ? (
                 <Link href="/creator"
@@ -238,7 +207,6 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Stats row */}
             <div className="flex flex-wrap gap-10 mt-16 pt-10 border-t border-brand-border/50">
               {stats.map(({ label, value, icon: Icon }) => (
                 <div key={label} className="flex flex-col">
@@ -291,7 +259,6 @@ export default function Home() {
                              hover:border-brand-green/30 hover:shadow-[0_0_20px_rgba(0,255,136,0.1)] transition-all cursor-pointer
                              group relative overflow-hidden"
                 >
-                  {/* Rank Badge */}
                   <div className={`absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm font-black
                     ${index === 0 ? 'bg-yellow-400 text-black' : 
                       index === 1 ? 'bg-gray-400 text-black' : 
@@ -300,7 +267,6 @@ export default function Home() {
                     #{index + 1}
                   </div>
 
-                  {/* Avatar */}
                   <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center mx-auto mb-4 overflow-hidden">
                     {creator.avatar_url ? (
                       <Image 
@@ -317,7 +283,6 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Info */}
                   <div className="text-center">
                     <h3 className="font-bold text-white mb-1 truncate">
                       {creator.username || 'Anonymous'}
@@ -343,7 +308,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Hover effect */}
                   <div className="absolute inset-0 bg-brand-green/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                 </div>
               ))}
@@ -358,77 +322,70 @@ export default function Home() {
         </div>
       </section>
 
-      {/* TOP BRANDS OF THE WEEK */}
+      {/* FEATURED BRANDS OF THE WEEK - Official Brands */}
       <section className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-10">
             <div>
               <h2 className="text-3xl md:text-4xl font-black mb-2">
-                Top <span className="text-brand-purple">Brands</span> of the Week
+                Featured <span className="text-brand-purple">Brands</span>
               </h2>
-              <p className="text-gray-400">Most active brands · Click to explore missions</p>
+              <p className="text-gray-400">Sponsored & Official partners · Click to explore missions</p>
             </div>
             <Link href="/missions" className="hidden md:flex items-center gap-2 text-brand-purple hover:underline">
               View All Missions <ArrowRight size={16} />
             </Link>
           </div>
 
-          {topBrands.length === 0 ? (
+          {featuredBrands.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              <Target size={48} className="mx-auto mb-4 text-gray-700" />
-              <p>No verified brands yet. Check back soon!</p>
+              <Star size={48} className="mx-auto mb-4 text-gray-700" />
+              <p>No featured brands yet.</p>
+              <p className="text-sm mt-2">Admin will add sponsored brands here.</p>
             </div>
           ) : (
             <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide items-center">
-              {topBrands.map((brand, index) => (
+              {featuredBrands.map((featured) => (
                 <Link 
-                  key={brand.id}
-                  href={`/brand/${brand.id}`}
+                  key={featured.id}
+                  href={`/brand/${featured.brand_id}`}
                   className="w-48 bg-brand-card border border-brand-border rounded-2xl p-6 flex-shrink-0 snap-start
                              hover:border-brand-purple/30 hover:shadow-[0_0_20px_rgba(155,89,255,0.1)] transition-all
                              group text-center"
                 >
-                  {/* Logo */}
+                  {/* Logo - FIXED: Using img tag for external URLs */}
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                    {brand.logo_url ? (
-                      <Image 
-                        src={brand.logo_url} 
-                        alt={brand.username || 'Brand'} 
-                        width={96} 
-                        height={96}
-                        className="object-cover w-full h-full"
+                    {featured.brand?.logo_url ? (
+                      <img 
+                        src={featured.brand.logo_url} 
+                        alt={featured.brand.username || 'Brand'} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
                       />
                     ) : (
                       <span className="text-3xl font-black text-white">
-                        {brand.username?.[0]?.toUpperCase() || 'B'}
+                        {featured.brand?.username?.[0]?.toUpperCase() || 'B'}
                       </span>
                     )}
                   </div>
 
-                  {/* Info */}
                   <h3 className="font-bold text-white mb-2 truncate">
-                    {brand.username || 'Anonymous'}
+                    {featured.brand?.username || 'Anonymous'}
                   </h3>
                   
-                  {/* Verification Badge */}
                   <div className="flex items-center justify-center gap-1 mb-3">
-                    {brand.is_official_verified && (
+                    {featured.brand?.is_official_verified && (
                       <span className="flex items-center gap-1 text-xs bg-[#FFAD1F]/10 text-[#FFAD1F] border border-[#FFAD1F]/20 px-2 py-0.5 rounded-full">
                         <Star size={10} className="fill-current" /> Official
                       </span>
                     )}
-                    {brand.is_verified && !brand.is_official_verified && (
+                    {featured.brand?.is_verified && !featured.brand?.is_official_verified && (
                       <span className="flex items-center gap-1 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full">
                         <CheckCircle size={10} className="fill-current" /> Verified
                       </span>
                     )}
-                  </div>
-
-                  <div className="space-y-1 text-xs text-gray-400">
-                    <p>{brand.missions_count} Active Missions</p>
-                    <p className="text-brand-green font-bold">
-                      {brand.total_reward_pool} USDC Pool
-                    </p>
                   </div>
                 </Link>
               ))}
@@ -556,7 +513,6 @@ export default function Home() {
 
       <Footer />
 
-      {/* Creator Profile Modal */}
       <CreatorProfileModal 
         creator={selectedCreator} 
         isOpen={!!selectedCreator} 
