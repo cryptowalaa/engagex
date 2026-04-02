@@ -68,6 +68,11 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([])
   const [submissions, setSubmissions] = useState<SubmissionWithEngagement[]>([])
   const [badgePayments, setBadgePayments] = useState<BadgePayment[]>([])
+  
+  // ✅ Featured Brands State
+  const [featuredBrands, setFeaturedBrands] = useState<any[]>([])
+  const [newFeaturedBrandId, setNewFeaturedBrandId] = useState('')
+  
   const [loading, setLoading] = useState(true)
   const [editingSubmission, setEditingSubmission] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ likes: 0, comments: 0, shares: 0, watch_time: 0 })
@@ -89,7 +94,9 @@ export default function AdminDashboard() {
         {data: pm},
         {data: pb},
         {data: us},
-        {data: bp}
+        {data: bp},
+        // ✅ Featured brands load
+        {data: fb}
       ] = await Promise.all([
         supabase.from('users').select('*', {count: 'exact', head: true}),
         supabase.from('missions').select('*', {count: 'exact', head: true}),
@@ -104,7 +111,11 @@ export default function AdminDashboard() {
         (supabase.from('badge_payments') as any)
           .select('*, user:users(username, wallet_address)')
           .order('created_at', {ascending: false})
-          .limit(50)
+          .limit(50),
+        // ✅ Load featured brands
+        (supabase.from('featured_brands') as any)
+          .select('*, brand:users(id, username, logo_url)')
+          .order('display_order', { ascending: true })
       ])
       
       // Count pending payments
@@ -122,6 +133,8 @@ export default function AdminDashboard() {
       setPendingBrands(pb || [])
       setUsers(us || [])
       setBadgePayments(bp || [])
+      // ✅ Set featured brands
+      setFeaturedBrands(fb || [])
       
       await loadSubmissions()
     } catch (error) {
@@ -140,6 +153,31 @@ export default function AdminDashboard() {
       .limit(20)
     
     setSubmissions(subs || [])
+  }
+
+  // ✅ Add featured brand function
+  const addFeaturedBrand = async () => {
+    if (!newFeaturedBrandId) return
+    try {
+      await (supabase.from('featured_brands') as any)
+        .insert({ brand_id: newFeaturedBrandId, display_order: featuredBrands.length + 1 })
+      toast.success('Brand added to featured!')
+      setNewFeaturedBrandId('')
+      await load()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  // ✅ Remove featured brand function
+  const removeFeaturedBrand = async (id: string) => {
+    try {
+      await (supabase.from('featured_brands') as any).delete().eq('id', id)
+      toast.success('Removed from featured')
+      await load()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
   }
 
   const approveBrand = async (userId: string) => {
@@ -368,6 +406,72 @@ export default function AdminDashboard() {
               ))}
             </div>
           )}
+
+          {/* ✅ FEATURED BRANDS MANAGEMENT SECTION */}
+          <div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Star size={20} className="text-yellow-400"/>
+              Featured Brands (Home Page)
+            </h2>
+            
+            {/* Add New */}
+            <div className="bg-brand-card border border-brand-border rounded-2xl p-4 mb-4">
+              <div className="flex gap-2">
+                <select 
+                  value={newFeaturedBrandId}
+                  onChange={(e) => setNewFeaturedBrandId(e.target.value)}
+                  className="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-sm text-white"
+                >
+                  <option value="">Select brand to feature...</option>
+                  {users.filter((u: any) => u.role === 'brand' && u.is_verified).map((brand: any) => (
+                    <option key={brand.id} value={brand.id}>{brand.username || brand.wallet_address}</option>
+                  ))}
+                </select>
+                <button 
+                  onClick={addFeaturedBrand}
+                  disabled={!newFeaturedBrandId}
+                  className="px-4 py-2 bg-brand-green text-brand-dark font-bold rounded-lg text-sm disabled:opacity-50"
+                >
+                  Add to Home
+                </button>
+              </div>
+            </div>
+
+            {/* Current Featured List */}
+            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                {featuredBrands.map((fb, index) => (
+                  <div key={fb.id} className="bg-brand-dark border border-brand-border rounded-xl p-4 flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center overflow-hidden">
+                      {fb.brand?.logo_url ? (
+                        <img src={fb.brand.logo_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-lg font-bold text-white">{fb.brand?.username?.[0] || 'B'}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white text-sm truncate">{fb.brand?.username || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500">Order: {fb.display_order}</p>
+                    </div>
+                    <button 
+                      onClick={() => removeFeaturedBrand(fb.id)}
+                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              
+              {featuredBrands.length === 0 && (
+                <div className="p-8 text-center text-gray-500">
+                  <Star size={48} className="mx-auto mb-3 text-gray-700" />
+                  <p>No featured brands yet</p>
+                  <p className="text-sm mt-1">Add brands to show on home page</p>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Badge Payments Section */}
           <div>
