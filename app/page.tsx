@@ -12,15 +12,12 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase/client'
 import { shortenAddress } from '@/lib/utils/helpers'
-import Image from 'next/image'
 import { CreatorProfileModal } from '@/components/creator-profile-modal'
 
-// Animated particle
 function Particle({ style }: { style: React.CSSProperties }) {
   return <div className="particle" style={style} />
 }
 
-// Types
 interface TopCreator {
   id: string
   wallet_address: string
@@ -79,6 +76,7 @@ export default function Home() {
         .order('total_earned', { ascending: false })
         .limit(10)
       
+      console.log('Top creators loaded:', data) // Debug log
       setTopCreators(data || [])
     } catch (error) {
       console.error('Load creators error:', error)
@@ -89,7 +87,6 @@ export default function Home() {
 
   async function loadFeaturedBrands() {
     try {
-      // Load ONLY featured brands (admin selected)
       const { data } = await (supabase.from('featured_brands') as any)
         .select(`
           id,
@@ -101,10 +98,33 @@ export default function Home() {
         .order('display_order', { ascending: true })
         .limit(10)
       
+      console.log('Featured brands loaded:', data) // Debug log
       setFeaturedBrands(data || [])
     } catch (error) {
       console.error('Load featured brands error:', error)
     }
+  }
+
+  // ✅ FIXED: Avatar component with proper fallback
+  const AvatarImage = ({ url, name, size = 80 }: { url: string | null, name: string | null, size?: number }) => {
+    const [error, setError] = useState(false)
+    
+    if (!url || error) {
+      return (
+        <span className="text-2xl font-black text-brand-dark flex items-center justify-center w-full h-full">
+          {name?.[0]?.toUpperCase() || 'C'}
+        </span>
+      )
+    }
+    
+    return (
+      <img 
+        src={url} 
+        alt={name || 'User'} 
+        className="object-cover w-full h-full"
+        onError={() => setError(true)}
+      />
+    )
   }
 
   const stats = [
@@ -115,30 +135,10 @@ export default function Home() {
   ]
 
   const features = [
-    {
-      icon: Target,
-      title: 'Create Missions',
-      desc: 'Brands launch missions with SOL/USDC reward pools. Set requirements, deadlines, and watch creators compete.',
-      color: 'brand-green',
-    },
-    {
-      icon: Zap,
-      title: 'Earn Rewards',
-      desc: 'Creators submit content and get scored automatically. Top performers split 60% of the reward pool.',
-      color: 'brand-purple',
-    },
-    {
-      icon: Trophy,
-      title: 'Climb Leaderboard',
-      desc: 'Daily and weekly rankings. Build your reputation and unlock higher-tier missions with bigger payouts.',
-      color: 'brand-green',
-    },
-    {
-      icon: Shield,
-      title: 'Solana-Powered',
-      desc: 'Lightning-fast transactions on Solana mainnet. Connect with Phantom, Solflare, or any Solana wallet.',
-      color: 'brand-purple',
-    },
+    { icon: Target, title: 'Create Missions', desc: 'Brands launch missions with SOL/USDC reward pools. Set requirements, deadlines, and watch creators compete.', color: 'brand-green' },
+    { icon: Zap, title: 'Earn Rewards', desc: 'Creators submit content and get scored automatically. Top performers split 60% of the reward pool.', color: 'brand-purple' },
+    { icon: Trophy, title: 'Climb Leaderboard', desc: 'Daily and weekly rankings. Build your reputation and unlock higher-tier missions with bigger payouts.', color: 'brand-green' },
+    { icon: Shield, title: 'Solana-Powered', desc: 'Lightning-fast transactions on Solana mainnet. Connect with Phantom, Solflare, or any Solana wallet.', color: 'brand-purple' },
   ]
 
   const howItWorks = [
@@ -157,7 +157,6 @@ export default function Home() {
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {particles.map((p, i) => <Particle key={i} style={p} />)}
         </div>
-
         <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-brand-green/8 blur-3xl animate-pulse-slow pointer-events-none" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-brand-purple/8 blur-3xl animate-pulse-slow pointer-events-none" style={{ animationDelay: '2s' }} />
 
@@ -193,16 +192,14 @@ export default function Home() {
             <div className="flex flex-wrap gap-4 items-center">
               {publicKey ? (
                 <Link href="/creator"
-                  className="flex items-center gap-2 bg-brand-green text-brand-dark font-black px-8 py-4 rounded-xl
-                             hover:bg-opacity-90 transition-all hover:shadow-[0_0_30px_rgba(0,255,136,0.4)] text-lg">
+                  className="flex items-center gap-2 bg-brand-green text-brand-dark font-black px-8 py-4 rounded-xl hover:bg-opacity-90 transition-all hover:shadow-[0_0_30px_rgba(0,255,136,0.4)] text-lg">
                   Enter Dashboard <ArrowRight size={20} />
                 </Link>
               ) : (
                 <WalletButton />
               )}
               <Link href="/missions"
-                className="flex items-center gap-2 border border-brand-border text-white px-8 py-4 rounded-xl
-                           hover:border-brand-green/40 hover:bg-brand-green/5 transition-all text-lg">
+                className="flex items-center gap-2 border border-brand-border text-white px-8 py-4 rounded-xl hover:border-brand-green/40 hover:bg-brand-green/5 transition-all text-lg">
                 Browse Missions <ChevronRight size={18} />
               </Link>
             </div>
@@ -214,16 +211,12 @@ export default function Home() {
                   <span className="text-sm text-gray-500 mt-1">{label}</span>
                 </div>
               ))}
-              <div className="ml-auto hidden lg:flex items-center gap-2 text-gray-500 text-sm">
-                <span>SECURED BY</span>
-                <span className="text-brand-purple font-bold text-base">◎ SOLANA</span>
-              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* TOP CREATORS OF THE WEEK */}
+      {/* TOP CREATORS OF THE WEEK - FIXED IMAGES */}
       <section className="py-20 px-4 bg-brand-card/20 border-y border-brand-border">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-10">
@@ -255,9 +248,7 @@ export default function Home() {
                 <div 
                   key={creator.id}
                   onClick={() => setSelectedCreator(creator)}
-                  className="w-64 bg-brand-card border border-brand-border rounded-2xl p-6 flex-shrink-0 snap-start
-                             hover:border-brand-green/30 hover:shadow-[0_0_20px_rgba(0,255,136,0.1)] transition-all cursor-pointer
-                             group relative overflow-hidden"
+                  className="w-64 bg-brand-card border border-brand-border rounded-2xl p-6 flex-shrink-0 snap-start hover:border-brand-green/30 hover:shadow-[0_0_20px_rgba(0,255,136,0.1)] transition-all cursor-pointer group relative overflow-hidden"
                 >
                   <div className={`absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm font-black
                     ${index === 0 ? 'bg-yellow-400 text-black' : 
@@ -267,20 +258,9 @@ export default function Home() {
                     #{index + 1}
                   </div>
 
+                  {/* ✅ FIXED: Using img tag with error handling */}
                   <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center mx-auto mb-4 overflow-hidden">
-                    {creator.avatar_url ? (
-                      <Image 
-                        src={creator.avatar_url} 
-                        alt={creator.username || 'Creator'} 
-                        width={80} 
-                        height={80}
-                        className="object-cover w-full h-full"
-                      />
-                    ) : (
-                      <span className="text-2xl font-black text-brand-dark">
-                        {creator.username?.[0]?.toUpperCase() || 'C'}
-                      </span>
-                    )}
+                    <AvatarImage url={creator.avatar_url} name={creator.username} size={80} />
                   </div>
 
                   <div className="text-center">
@@ -322,7 +302,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURED BRANDS OF THE WEEK - Official Brands */}
+      {/* FEATURED BRANDS - ADMIN SELECTED */}
       <section className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-10">
@@ -349,11 +329,8 @@ export default function Home() {
                 <Link 
                   key={featured.id}
                   href={`/brand/${featured.brand_id}`}
-                  className="w-48 bg-brand-card border border-brand-border rounded-2xl p-6 flex-shrink-0 snap-start
-                             hover:border-brand-purple/30 hover:shadow-[0_0_20px_rgba(155,89,255,0.1)] transition-all
-                             group text-center"
+                  className="w-48 bg-brand-card border border-brand-border rounded-2xl p-6 flex-shrink-0 snap-start hover:border-brand-purple/30 hover:shadow-[0_0_20px_rgba(155,89,255,0.1)] transition-all group text-center"
                 >
-                  {/* Logo - FIXED: Using img tag for external URLs */}
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center mx-auto mb-4 overflow-hidden">
                     {featured.brand?.logo_url ? (
                       <img 
@@ -413,8 +390,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {features.map(({ icon: Icon, title, desc, color }) => (
-            <div key={title}
-              className="bg-brand-card border border-brand-border rounded-2xl p-8 card-hover shimmer group">
+            <div key={title} className="bg-brand-card border border-brand-border rounded-2xl p-8 card-hover shimmer group">
               <div className={`w-12 h-12 rounded-xl bg-${color}/10 border border-${color}/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
                 <Icon size={24} className={`text-${color}`} />
               </div>
@@ -498,13 +474,11 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/missions"
-              className="bg-brand-green text-brand-dark font-black px-10 py-4 rounded-xl text-lg
-                         hover:bg-opacity-90 hover:shadow-[0_0_30px_rgba(0,255,136,0.4)] transition-all flex items-center justify-center gap-2">
+              className="bg-brand-green text-brand-dark font-black px-10 py-4 rounded-xl text-lg hover:bg-opacity-90 hover:shadow-[0_0_30px_rgba(0,255,136,0.4)] transition-all flex items-center justify-center gap-2">
               Start Earning <ArrowRight size={20} />
             </Link>
             <Link href="/brand/missions/create"
-              className="border border-brand-border text-white px-10 py-4 rounded-xl text-lg
-                         hover:border-brand-purple/40 hover:bg-brand-purple/5 transition-all flex items-center justify-center gap-2">
+              className="border border-brand-border text-white px-10 py-4 rounded-xl text-lg hover:border-brand-purple/40 hover:bg-brand-purple/5 transition-all flex items-center justify-center gap-2">
               Launch a Mission <Target size={18} />
             </Link>
           </div>
