@@ -12,25 +12,31 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
 
-// Points configuration
+// Inline getImageUrl function
+function getImageUrl(imageUrl: string | null): string {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http')) return imageUrl
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return imageUrl
+  const cleanPath = imageUrl.replace(/^(avatars|missions)\//, '')
+  return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+}
+
 const ENGAGEMENT_POINTS = {
   like: 1,
   comment: 2,
   share: 3
 }
 
-// Score weights for creator points calculation
 const SCORE_WEIGHTS = {
   likes: 1,
   comments: 3,
   shares: 5
 }
 
-// Auto-detect URLs in text and make them clickable
 function LinkifyText({ text }: { text: string }) {
   if (!text) return null
   
-  // Regex to detect URLs (http, https, www)
   const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/g
   
   const parts = text.split(urlRegex)
@@ -40,7 +46,6 @@ function LinkifyText({ text }: { text: string }) {
       {parts.map((part, i) => {
         if (!part) return null
         
-        // Check if part is a URL
         if (part.match(/^https?:\/\//) || part.match(/^www\./)) {
           const url = part.startsWith('www.') ? `https://${part}` : part
           return (
@@ -57,11 +62,46 @@ function LinkifyText({ text }: { text: string }) {
           )
         }
         
-        // Regular text - preserve newlines
         return <span key={i}>{part}</span>
       })}
     </span>
   )
+}
+
+function isMissionExpired(deadline: string): boolean {
+  return new Date(deadline) < new Date()
+}
+
+function getDisplayStatus(mission: any): { 
+  status: string; 
+  isExpired: boolean; 
+  badgeClass: string 
+} {
+  const expired = isMissionExpired(mission.deadline)
+  const status = expired ? 'expired' : mission.status
+  
+  let badgeClass = ''
+  switch (status) {
+    case 'active':
+      badgeClass = 'bg-brand-green/10 text-brand-green border border-brand-green/20'
+      break
+    case 'expired':
+      badgeClass = 'bg-red-500/10 text-red-400 border border-red-500/20'
+      break
+    case 'funded':
+      badgeClass = 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+      break
+    case 'completed':
+      badgeClass = 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+      break
+    case 'cancelled':
+      badgeClass = 'bg-red-500/10 text-red-400 border border-red-500/20'
+      break
+    default:
+      badgeClass = 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+  }
+  
+  return { status, isExpired: expired, badgeClass }
 }
 
 export default function MissionDetailPage() {
@@ -85,14 +125,12 @@ export default function MissionDetailPage() {
   async function loadData() {
     setLoading(true)
     try {
-      // Load mission with brand info including verified status
       const { data: m } = await (supabase.from('missions') as any)
-        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url)')
+        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url, logo_url)')
         .eq('id', id)
         .single()
       setMission(m)
       
-      // Load submissions with engagement
       const { data: subs } = await (supabase
         .from('submissions') as any)
         .select(`*, creator:users(id, username, wallet_address, avatar_url), engagement:engagements(*)`)
@@ -101,13 +139,11 @@ export default function MissionDetailPage() {
       
       setSubmissions(subs || [])
       
-      // Load current user and their engagements
       if (publicKey) {
         const { data: u } = await (supabase.from('users') as any).select('*').eq('wallet_address', publicKey.toBase58()).single()
         if (u) {
           setCurrentUser(u)
           
-          // Check if user submitted to this mission
           const { data: mine } = await (supabase.from('submissions') as any)
             .select('id')
             .eq('mission_id', id)
@@ -115,7 +151,6 @@ export default function MissionDetailPage() {
             .single()
           setHasSubmitted(!!mine)
           
-          // Load user's previous engagements for ALL submissions
           const { data: engagements } = await (supabase.from('user_engagements') as any)
             .select('submission_id, action_type')
             .eq('user_id', u.id)
@@ -135,19 +170,16 @@ export default function MissionDetailPage() {
     }
   }
 
-  // Calculate creator score based on engagement
   function calculateCreatorScore(likes: number, comments: number, shares: number) {
     return (likes * SCORE_WEIGHTS.likes) + (comments * SCORE_WEIGHTS.comments) + (shares * SCORE_WEIGHTS.shares)
   }
 
-  // Handle user engagement (like/comment/share)
   const handleEngagement = async (submissionId: string, actionType: 'like' | 'comment' | 'share', metadata?: any) => {
     if (!currentUser) {
       toast.error('Connect wallet first')
       return
     }
     
-    // Check if already engaged
     if (userEngagements[submissionId]?.includes(actionType)) {
       toast.error(`You already ${actionType}d this!`)
       return
@@ -156,7 +188,6 @@ export default function MissionDetailPage() {
     try {
       const points = ENGAGEMENT_POINTS[actionType]
       
-      // Insert user engagement
       const { error: insertError } = await (supabase.from('user_engagements') as any)
         .insert({
           user_id: currentUser.id,
@@ -169,7 +200,6 @@ export default function MissionDetailPage() {
 
       if (insertError) throw insertError
 
-      // Update engagement counts in engagements table
       const submission = submissions.find(s => s.id === submissionId)
       if (submission) {
         const currentEngagement = submission.engagement || { likes: 0, comments: 0, shares: 0 }
@@ -179,13 +209,11 @@ export default function MissionDetailPage() {
         if (actionType === 'comment') updates.comments = (currentEngagement.comments || 0) + 1
         if (actionType === 'share') updates.shares = (currentEngagement.shares || 0) + 1
         
-        // Calculate new score
         const newLikes = updates.likes ?? currentEngagement.likes
         const newComments = updates.comments ?? currentEngagement.comments
         const newShares = updates.shares ?? currentEngagement.shares
         const newScore = calculateCreatorScore(newLikes, newComments, newShares)
         
-        // Update or insert engagement record
         if (submission.engagement?.id) {
           await (supabase.from('engagements') as any)
             .update({ ...updates, score: newScore, updated_at: new Date().toISOString() })
@@ -200,22 +228,18 @@ export default function MissionDetailPage() {
             })
         }
 
-        // Update submission score
         await (supabase.from('submissions') as any)
           .update({ score: newScore, updated_at: new Date().toISOString() })
           .eq('id', submissionId)
       }
 
-      // Update local state immediately
       setUserEngagements(prev => ({
         ...prev,
         [submissionId]: [...(prev[submissionId] || []), actionType]
       }))
 
-      // Refresh submissions to show updated scores
       await loadData()
 
-      // Update user total_points
       await (supabase.from('users') as any)
         .update({ total_points: (currentUser.total_points || 0) + points })
         .eq('id', currentUser.id)
@@ -227,7 +251,6 @@ export default function MissionDetailPage() {
     }
   }
 
-  // Open comment modal
   const openCommentModal = (submissionId: string) => {
     if (!currentUser) {
       toast.error('Connect wallet first')
@@ -240,7 +263,6 @@ export default function MissionDetailPage() {
     setCommentModal({ open: true, submissionId })
   }
 
-  // Submit comment
   const submitComment = async () => {
     if (!commentModal.submissionId || !commentText.trim()) {
       toast.error('Please enter a comment')
@@ -252,7 +274,6 @@ export default function MissionDetailPage() {
     setCommentText('')
   }
 
-  // Handle share with Twitter
   const handleShare = async (submission: any) => {
     if (!currentUser) {
       toast.error('Connect wallet first')
@@ -288,43 +309,47 @@ export default function MissionDetailPage() {
     </div>
   )
 
+  const { status: displayStatus, isExpired, badgeClass } = getDisplayStatus(mission)
+
   return (
     <div className="min-h-screen bg-brand-dark">
       <Navbar />
       <div className="pt-24 pb-16 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main content */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
-                {/* Mission Image */}
                 {mission.image_url && (
                   <div className="mb-4 h-48 rounded-xl overflow-hidden bg-brand-dark relative">
                     <Image 
-                      src={mission.image_url} 
+                      src={getImageUrl(mission.image_url)}
                       alt={mission.title}
                       fill
                       className="object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none'
                       }}
+                      unoptimized
                     />
                   </div>
                 )}
                 
-                {/* Brand Info with Verified Badge - CLICKABLE */}
                 <Link 
                   href={`/brand/${mission.brand?.id}`}
                   className="flex items-center gap-3 mb-4 p-3 -ml-3 rounded-xl hover:bg-white/5 transition-all group"
                 >
                   <div className="w-10 h-10 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple font-bold group-hover:scale-110 transition-transform overflow-hidden">
-                    {mission.brand?.avatar_url ? (
+                    {mission.brand?.logo_url || mission.brand?.avatar_url ? (
                       <Image 
-                        src={mission.brand.avatar_url} 
+                        src={getImageUrl(mission.brand.logo_url || mission.brand.avatar_url)}
                         alt={mission.brand?.username || 'Brand'} 
                         width={40} 
                         height={40}
                         className="object-cover w-full h-full"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                        unoptimized
                       />
                     ) : (
                       mission.brand?.username?.[0]?.toUpperCase() || 'B'
@@ -335,14 +360,12 @@ export default function MissionDetailPage() {
                       <p className="text-white font-semibold group-hover:text-brand-green transition-colors">
                         {mission.brand?.username || shortenAddress(mission.brand?.wallet_address || '', 4)}
                       </p>
-                      {/* Green Verified Badge */}
                       {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-1 text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full">
                           <CheckCircle size={12} className="fill-current" />
                           Verified
                         </span>
                       )}
-                      {/* Yellow Official Badge */}
                       {mission.brand?.is_official_verified && (
                         <span className="flex items-center gap-1 text-xs bg-[#FFAD1F]/10 text-[#FFAD1F] border border-[#FFAD1F]/20 px-2 py-0.5 rounded-full">
                           <span className="w-3 h-3 bg-[#FFAD1F] rounded-full flex items-center justify-center text-[8px] text-brand-dark font-bold">✓</span>
@@ -356,17 +379,17 @@ export default function MissionDetailPage() {
                 </Link>
                 
                 <div className="flex items-start justify-between mb-4">
-                  <span className="text-xs px-3 py-1 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-full">{mission.status}</span>
+                  <span className={`text-xs px-3 py-1 rounded-full ${badgeClass}`}>
+                    {displayStatus}
+                  </span>
                   <span className="text-xs text-gray-500">{mission.category}</span>
                 </div>
                 <h1 className="text-2xl font-black text-white mb-4">{mission.title}</h1>
                 
-                {/* Description with proper formatting and clickable links */}
                 <div className="text-gray-300 leading-relaxed mb-6 space-y-4">
                   <LinkifyText text={mission.description} />
                 </div>
                 
-                {/* Requirements with proper formatting */}
                 {mission.requirements && (
                   <div className="bg-brand-dark rounded-xl p-4 border border-brand-border">
                     <h3 className="text-white font-semibold mb-3 text-sm">Requirements</h3>
@@ -377,7 +400,6 @@ export default function MissionDetailPage() {
                 )}
               </div>
 
-              {/* Leaderboard Link */}
               <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
                 <Link 
                   href={`/missions/${id}/leaderboard`}
@@ -412,7 +434,6 @@ export default function MissionDetailPage() {
                       
                       return (
                         <div key={sub.id} className="p-4 bg-brand-dark rounded-xl border border-brand-border">
-                          {/* Creator Info */}
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
                               <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${i===0?'bg-yellow-500 text-black':i===1?'bg-gray-400 text-black':i===2?'bg-orange-500 text-black':'bg-brand-border text-gray-400'}`}>{i+1}</span>
@@ -427,7 +448,6 @@ export default function MissionDetailPage() {
                             </div>
                           </div>
 
-                          {/* Engagement Stats */}
                           <div className="flex items-center gap-4 text-sm text-gray-400 mb-3 px-2">
                             <span className="flex items-center gap-1.5">
                               <Heart size={14} className="text-red-400"/> {sub.engagement?.likes || 0}
@@ -443,7 +463,6 @@ export default function MissionDetailPage() {
                             </a>
                           </div>
 
-                          {/* User Engagement Buttons */}
                           {currentUser && currentUser.id !== sub.creator_id && (
                             <div className="flex gap-2 pt-3 border-t border-brand-border">
                               <button 
@@ -494,7 +513,6 @@ export default function MissionDetailPage() {
               )}
             </div>
 
-            {/* Sidebar */}
             <div className="space-y-6">
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between py-3 border-b border-brand-border">
@@ -503,7 +521,9 @@ export default function MissionDetailPage() {
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-brand-border">
                   <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={13} />Deadline</span>
-                  <span className="text-yellow-400 text-sm font-medium">{timeUntil(mission.deadline)} left</span>
+                  <span className={`text-sm font-medium ${isExpired ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {isExpired ? 'Expired' : `${timeUntil(mission.deadline)} left`}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-brand-border">
                   <span className="text-gray-400 text-sm flex items-center gap-1"><Users size={13} />Max Winners</span>
@@ -517,7 +537,13 @@ export default function MissionDetailPage() {
 
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
                 <h2 className="text-white font-bold mb-4">Submit Your Entry</h2>
-                {hasSubmitted ? (
+                {isExpired ? (
+                  <div className="text-center py-4">
+                    <div className="text-3xl mb-2">⏰</div>
+                    <p className="text-red-400 font-semibold">Mission Expired</p>
+                    <p className="text-gray-400 text-sm mt-1">Submissions are closed</p>
+                  </div>
+                ) : hasSubmitted ? (
                   <div className="text-center py-4">
                     <div className="text-3xl mb-2">✅</div>
                     <p className="text-brand-green font-semibold">Already Submitted!</p>
@@ -532,7 +558,6 @@ export default function MissionDetailPage() {
         </div>
       </div>
 
-      {/* Comment Modal */}
       {commentModal.open && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-brand-card border border-brand-border rounded-2xl p-6 w-full max-w-md">
