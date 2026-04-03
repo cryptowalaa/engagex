@@ -9,11 +9,22 @@ import { shortenAddress, formatUSDC, timeUntil } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import Image from 'next/image'
 
+// Inline getImageUrl function
+function getImageUrl(imageUrl: string | null): string {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http')) return imageUrl
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return imageUrl
+  const cleanPath = imageUrl.replace(/^(avatars|missions)\//, '')
+  return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+}
+
 interface BrandProfile {
   id: string
   username: string | null
   wallet_address: string
   avatar_url: string | null
+  logo_url: string | null
   bio: string | null
   twitter_handle: string | null
   discord_handle: string | null
@@ -35,6 +46,20 @@ interface Mission {
   max_winners: number
   image_url: string | null
   created_at: string
+}
+
+// Check if mission is expired
+function isMissionExpired(deadline: string): boolean {
+  return new Date(deadline) < new Date()
+}
+
+// Get display status
+function getDisplayStatus(mission: Mission): { status: string; isExpired: boolean } {
+  const expired = isMissionExpired(mission.deadline)
+  return {
+    status: expired ? 'expired' : mission.status,
+    isExpired: expired
+  }
 }
 
 export default function BrandProfilePage() {
@@ -60,7 +85,7 @@ export default function BrandProfilePage() {
       
       setBrand(brandData)
 
-      // Load brand&apos;s missions
+      // Load brand's missions
       const { data: missionsData } = await (supabase.from('missions') as any)
         .select('*')
         .eq('brand_id', brandId)
@@ -94,8 +119,14 @@ export default function BrandProfilePage() {
     )
   }
 
-  const activeMissions = missions.filter(m => m.status === 'active')
-  const completedMissions = missions.filter(m => m.status === 'completed')
+  const activeMissions = missions.filter(m => {
+    const { isExpired } = getDisplayStatus(m)
+    return !isExpired && m.status === 'active'
+  })
+  const completedMissions = missions.filter(m => {
+    const { isExpired } = getDisplayStatus(m)
+    return isExpired || m.status === 'completed'
+  })
 
   return (
     <div className="min-h-screen bg-brand-dark">
@@ -114,15 +145,19 @@ export default function BrandProfilePage() {
           {/* Brand Header */}
           <div className="bg-brand-card border border-brand-border rounded-2xl p-8 mb-8">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              {/* Brand Avatar */}
+              {/* Brand Avatar - FIXED with getImageUrl */}
               <div className="w-24 h-24 rounded-2xl border-2 border-brand-green flex items-center justify-center bg-gradient-to-br from-brand-green to-brand-purple text-brand-dark font-black text-4xl overflow-hidden flex-shrink-0">
-                {brand.avatar_url ? (
+                {brand.logo_url || brand.avatar_url ? (
                   <Image 
-                    src={brand.avatar_url} 
+                    src={getImageUrl(brand.logo_url || brand.avatar_url)} 
                     alt={brand.username || 'Brand'} 
                     width={96} 
                     height={96}
                     className="object-cover w-full h-full"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                    unoptimized
                   />
                 ) : (
                   brand.username?.[0]?.toUpperCase() || 'B'
