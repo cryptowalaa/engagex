@@ -7,7 +7,7 @@ import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
 import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, CheckCircle, TrendingUp, Link as LinkIcon } from 'lucide-react'
-import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
+import { timeUntil, formatUSDC, shortenAddress, getImageUrl } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
@@ -64,6 +64,44 @@ function LinkifyText({ text }: { text: string }) {
   )
 }
 
+// Check if mission is expired
+function isMissionExpired(deadline: string): boolean {
+  return new Date(deadline) < new Date()
+}
+
+// Get display status with color
+function getDisplayStatus(mission: any): { 
+  status: string; 
+  isExpired: boolean; 
+  badgeClass: string 
+} {
+  const expired = isMissionExpired(mission.deadline)
+  const status = expired ? 'expired' : mission.status
+  
+  let badgeClass = ''
+  switch (status) {
+    case 'active':
+      badgeClass = 'bg-brand-green/10 text-brand-green border border-brand-green/20'
+      break
+    case 'expired':
+      badgeClass = 'bg-red-500/10 text-red-400 border border-red-500/20'
+      break
+    case 'funded':
+      badgeClass = 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+      break
+    case 'completed':
+      badgeClass = 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+      break
+    case 'cancelled':
+      badgeClass = 'bg-red-500/10 text-red-400 border border-red-500/20'
+      break
+    default:
+      badgeClass = 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+  }
+  
+  return { status, isExpired: expired, badgeClass }
+}
+
 export default function MissionDetailPage() {
   const params = useParams()
   const id = params.id as string
@@ -87,7 +125,7 @@ export default function MissionDetailPage() {
     try {
       // Load mission with brand info including verified status
       const { data: m } = await (supabase.from('missions') as any)
-        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url)')
+        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url, logo_url)')
         .eq('id', id)
         .single()
       setMission(m)
@@ -288,6 +326,9 @@ export default function MissionDetailPage() {
     </div>
   )
 
+  // Get display status
+  const { status: displayStatus, isExpired, badgeClass } = getDisplayStatus(mission)
+
   return (
     <div className="min-h-screen bg-brand-dark">
       <Navbar />
@@ -297,17 +338,18 @@ export default function MissionDetailPage() {
             {/* Main content */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
-                {/* Mission Image */}
+                {/* Mission Image - FIXED with getImageUrl */}
                 {mission.image_url && (
                   <div className="mb-4 h-48 rounded-xl overflow-hidden bg-brand-dark relative">
                     <Image 
-                      src={mission.image_url} 
+                      src={getImageUrl(mission.image_url)}  // ✅ FIXED: using getImageUrl
                       alt={mission.title}
                       fill
                       className="object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none'
                       }}
+                      unoptimized
                     />
                   </div>
                 )}
@@ -317,14 +359,19 @@ export default function MissionDetailPage() {
                   href={`/brand/${mission.brand?.id}`}
                   className="flex items-center gap-3 mb-4 p-3 -ml-3 rounded-xl hover:bg-white/5 transition-all group"
                 >
+                  {/* Brand Logo/Avatar - FIXED */}
                   <div className="w-10 h-10 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple font-bold group-hover:scale-110 transition-transform overflow-hidden">
-                    {mission.brand?.avatar_url ? (
+                    {mission.brand?.logo_url || mission.brand?.avatar_url ? (
                       <Image 
-                        src={mission.brand.avatar_url} 
+                        src={getImageUrl(mission.brand.logo_url || mission.brand.avatar_url)}  // ✅ FIXED
                         alt={mission.brand?.username || 'Brand'} 
                         width={40} 
                         height={40}
                         className="object-cover w-full h-full"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none'
+                        }}
+                        unoptimized
                       />
                     ) : (
                       mission.brand?.username?.[0]?.toUpperCase() || 'B'
@@ -355,8 +402,11 @@ export default function MissionDetailPage() {
                   <ExternalLink size={16} className="text-gray-500 group-hover:text-brand-green transition-colors" />
                 </Link>
                 
+                {/* Status Badge - FIXED with expiry check */}
                 <div className="flex items-start justify-between mb-4">
-                  <span className="text-xs px-3 py-1 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-full">{mission.status}</span>
+                  <span className={`text-xs px-3 py-1 rounded-full ${badgeClass}`}>
+                    {displayStatus}
+                  </span>
                   <span className="text-xs text-gray-500">{mission.category}</span>
                 </div>
                 <h1 className="text-2xl font-black text-white mb-4">{mission.title}</h1>
@@ -503,7 +553,9 @@ export default function MissionDetailPage() {
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-brand-border">
                   <span className="text-gray-400 text-sm flex items-center gap-1"><Clock size={13} />Deadline</span>
-                  <span className="text-yellow-400 text-sm font-medium">{timeUntil(mission.deadline)} left</span>
+                  <span className={`text-sm font-medium ${isExpired ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {isExpired ? 'Expired' : `${timeUntil(mission.deadline)} left`}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-brand-border">
                   <span className="text-gray-400 text-sm flex items-center gap-1"><Users size={13} />Max Winners</span>
@@ -515,9 +567,16 @@ export default function MissionDetailPage() {
                 </div>
               </div>
 
+              {/* Submit Section - Disabled if expired */}
               <div className="bg-brand-card border border-brand-border rounded-2xl p-6">
                 <h2 className="text-white font-bold mb-4">Submit Your Entry</h2>
-                {hasSubmitted ? (
+                {isExpired ? (
+                  <div className="text-center py-4">
+                    <div className="text-3xl mb-2">⏰</div>
+                    <p className="text-red-400 font-semibold">Mission Expired</p>
+                    <p className="text-gray-400 text-sm mt-1">Submissions are closed</p>
+                  </div>
+                ) : hasSubmitted ? (
                   <div className="text-center py-4">
                     <div className="text-3xl mb-2">✅</div>
                     <p className="text-brand-green font-semibold">Already Submitted!</p>
