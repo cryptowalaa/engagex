@@ -14,6 +14,16 @@ import { shortenAddress, formatUSDC } from '@/lib/utils/helpers'
 import Image from 'next/image'
 import Link from 'next/link'
 
+// Inline getImageUrl function
+function getImageUrl(imageUrl: string | null): string {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http')) return imageUrl
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return imageUrl
+  const cleanPath = imageUrl.replace(/^(avatars|missions)\//, '')
+  return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+}
+
 interface CreatorProfile {
   id: string
   wallet_address: string
@@ -208,15 +218,19 @@ export default function CreatorProfilePage() {
           {/* Profile Header */}
           <div className="bg-brand-card border border-brand-border rounded-2xl p-8 mb-8">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              {/* Avatar */}
+              {/* Avatar - FIXED with getImageUrl */}
               <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center text-brand-dark font-black text-5xl overflow-hidden flex-shrink-0">
                 {creator.avatar_url ? (
                   <Image 
-                    src={creator.avatar_url} 
+                    src={getImageUrl(creator.avatar_url)} 
                     alt={creator.username || 'Creator'} 
                     width={112} 
                     height={112}
                     className="object-cover w-full h-full"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                    unoptimized
                   />
                 ) : (
                   creator.username?.[0]?.toUpperCase() || 'C'
