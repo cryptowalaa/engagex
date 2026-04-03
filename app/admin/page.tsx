@@ -7,7 +7,8 @@ import { Navbar } from '@/components/layout/navbar'
 import { 
   Shield, Users, Target, FileText, Trophy, Heart, MessageCircle, 
   Share2, Building2, CheckCircle, XCircle, Trash2, ExternalLink, 
-  Sparkles, Crown, Clock, Wallet, Check, Star
+  Sparkles, Crown, Clock, Wallet, Check, Star, ImageIcon, Link as LinkIcon,
+  Plus, GripVertical
 } from 'lucide-react'
 import { APP_CONFIG } from '@/lib/config'
 import toast from 'react-hot-toast'
@@ -46,11 +47,25 @@ interface BadgePayment {
   }
 }
 
-// Extended mission type with payment fields
 interface MissionWithPayment extends Mission {
   payment_status?: string
   payment_tx?: string
   paid_at?: string
+}
+
+interface FeaturedBrand {
+  id: string
+  brand_id: string
+  display_order: number
+  is_active: boolean
+  brand: {
+    id: string
+    username: string | null
+    logo_url: string | null
+    wallet_address: string
+    is_verified: boolean
+    is_official_verified: boolean
+  }
 }
 
 export default function AdminDashboard() {
@@ -68,10 +83,13 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([])
   const [submissions, setSubmissions] = useState<SubmissionWithEngagement[]>([])
   const [badgePayments, setBadgePayments] = useState<BadgePayment[]>([])
+  const [featuredBrands, setFeaturedBrands] = useState<FeaturedBrand[]>([])
   const [loading, setLoading] = useState(true)
   const [editingSubmission, setEditingSubmission] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ likes: 0, comments: 0, shares: 0, watch_time: 0 })
+  const [logoUrls, setLogoUrls] = useState<Record<string, string>>({})
   const [badgeFilter, setBadgeFilter] = useState<'all' | 'blue' | 'gold'>('all')
+  const [newFeaturedBrandId, setNewFeaturedBrandId] = useState('')
   const isAdmin = publicKey?.toBase58() === APP_CONFIG.adminWallet
 
   useEffect(() => {
@@ -89,7 +107,8 @@ export default function AdminDashboard() {
         {data: pm},
         {data: pb},
         {data: us},
-        {data: bp}
+        {data: bp},
+        {data: fb}
       ] = await Promise.all([
         supabase.from('users').select('*', {count: 'exact', head: true}),
         supabase.from('missions').select('*', {count: 'exact', head: true}),
@@ -100,14 +119,16 @@ export default function AdminDashboard() {
           .eq('status', 'draft')
           .order('created_at', {ascending: false}),
         (supabase.from('users') as any).select('*').eq('brand_status', 'pending').order('brand_submitted_at', {ascending: false}),
-        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(10),
+        supabase.from('users').select('*').order('created_at', {ascending: false}).limit(50),
         (supabase.from('badge_payments') as any)
           .select('*, user:users(username, wallet_address)')
           .order('created_at', {ascending: false})
-          .limit(50)
+          .limit(50),
+        (supabase.from('featured_brands') as any)
+          .select('*, brand:users(id, username, logo_url, wallet_address, is_verified, is_official_verified)')
+          .order('display_order', {ascending: true})
       ])
       
-      // Count pending payments
       const pendingPaymentCount = (pm || []).filter((m: any) => m.payment_status === 'pending').length
       
       setStats({
@@ -122,6 +143,13 @@ export default function AdminDashboard() {
       setPendingBrands(pb || [])
       setUsers(us || [])
       setBadgePayments(bp || [])
+      setFeaturedBrands(fb || [])
+      
+      const urls: Record<string, string> = {}
+      ;(us || []).forEach((u: any) => {
+        if (u.logo_url) urls[u.id] = u.logo_url
+      })
+      setLogoUrls(urls)
       
       await loadSubmissions()
     } catch (error) {
@@ -264,15 +292,97 @@ export default function AdminDashboard() {
     }
   }
 
+  const updateLogoUrl = async (brandId: string, url: string) => {
+    try {
+      await (supabase.from('users') as any)
+        .update({ logo_url: url })
+        .eq('id', brandId)
+      
+      setLogoUrls(prev => ({ ...prev, [brandId]: url }))
+      toast.success('Logo URL updated!')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update logo')
+    }
+  }
+
+  const removeLogo = async (brandId: string) => {
+    if (!confirm('Remove this logo URL?')) return
+    
+    try {
+      await (supabase.from('users') as any)
+        .update({ logo_url: null })
+        .eq('id', brandId)
+      
+      setLogoUrls(prev => {
+        const newUrls = { ...prev }
+        delete newUrls[brandId]
+        return newUrls
+      })
+      
+      toast.success('Logo removed!')
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to remove logo')
+    }
+  }
+
+  const addFeaturedBrand = async () => {
+    if (!newFeaturedBrandId) {
+      toast.error('Please select a brand')
+      return
+    }
+    
+    try {
+      const maxOrder = featuredBrands.length > 0 
+        ? Math.max(...featuredBrands.map(f => f.display_order)) 
+        : 0
+      
+      await (supabase.from('featured_brands') as any)
+        .insert({ 
+          brand_id: newFeaturedBrandId, 
+          display_order: maxOrder + 1,
+          is_active: true
+        })
+      
+      toast.success('Brand added to featured!')
+      setNewFeaturedBrandId('')
+      await load()
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to add featured brand')
+    }
+  }
+
+  const removeFeaturedBrand = async (id: string) => {
+    if (!confirm('Remove from featured brands?')) return
+    
+    try {
+      await (supabase.from('featured_brands') as any).delete().eq('id', id)
+      toast.success('Removed from featured')
+      await load()
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to remove')
+    }
+  }
+
+  const toggleFeaturedActive = async (id: string, current: boolean) => {
+    try {
+      await (supabase.from('featured_brands') as any)
+        .update({ is_active: !current })
+        .eq('id', id)
+      
+      toast.success(current ? 'Deactivated' : 'Activated')
+      await load()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
   const filteredBadgePayments = badgePayments.filter(p => 
     badgeFilter === 'all' ? true : p.badge_type === badgeFilter
   )
 
   const totalBadgeRevenue = badgePayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
-  // Payment status badge component
   const PaymentStatusBadge = ({ mission }: { mission: MissionWithPayment }) => {
-    // Check if paid (either payment_status is completed, or has payment_tx)
     const isPaid = mission.payment_status === 'completed' || (mission.payment_tx && mission.payment_tx.length > 0)
     
     if (isPaid) {
@@ -295,7 +405,6 @@ export default function AdminDashboard() {
       )
     }
     
-    // Check if pending payment
     if (mission.payment_status === 'pending') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
@@ -379,6 +488,21 @@ export default function AdminDashboard() {
                   {badgePayments.length} total
                 </span>
               </h2>
+              <div className="flex gap-2">
+                {(['all', 'blue', 'gold'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setBadgeFilter(filter)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      badgeFilter === filter
+                        ? 'bg-brand-purple text-white'
+                        : 'bg-brand-card border border-brand-border text-gray-400 hover:border-brand-purple/30'
+                    }`}
+                  >
+                    {filter === 'all' ? 'All' : filter === 'blue' ? 'Verified' : 'Official'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
@@ -462,23 +586,10 @@ export default function AdminDashboard() {
                   </table>
                 </div>
               )}
-              
-              {filteredBadgePayments.length > 0 && (
-                <div className="p-4 border-t border-brand-border bg-brand-dark/30">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">
-                      Showing {filteredBadgePayments.length} of {badgePayments.length} payments
-                    </span>
-                    <span className="text-brand-green font-bold">
-                      Total Revenue: ${totalBadgeRevenue.toFixed(2)} USDC
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Pending Missions - WITH PAYMENT STATUS */}
+          {/* Pending Missions */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Target size={20} className="text-brand-green"/>
@@ -520,7 +631,6 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex gap-2">
-                              {/* Only approve if payment completed (has payment_tx) */}
                               {(m.payment_status === 'completed' || (m.payment_tx && m.payment_tx.length > 0)) ? (
                                 <button 
                                   onClick={() => approveMission(m.id)} 
@@ -633,6 +743,205 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Featured Brands Management */}
+          <div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <Star size={20} className="text-yellow-400"/>
+              Featured Brands (Home Page)
+              <span className="ml-2 text-xs bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-2 py-0.5 rounded-full">
+                {featuredBrands.length} featured
+              </span>
+            </h2>
+            
+            <div className="bg-brand-card border border-brand-border rounded-2xl p-4 mb-4">
+              <div className="flex flex-col md:flex-row gap-3">
+                <select 
+                  value={newFeaturedBrandId}
+                  onChange={(e) => setNewFeaturedBrandId(e.target.value)}
+                  className="flex-1 bg-brand-dark border border-brand-border rounded-lg px-3 py-2 text-sm text-white"
+                >
+                  <option value="">Select verified brand to feature...</option>
+                  {users
+                    .filter((u: any) => u.role === 'brand' && u.is_verified && !featuredBrands.some(f => f.brand_id === u.id))
+                    .map((brand: any) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.username || shortenAddress(brand.wallet_address, 6)}
+                      </option>
+                    ))}
+                </select>
+                <button 
+                  onClick={addFeaturedBrand}
+                  disabled={!newFeaturedBrandId}
+                  className="px-4 py-2 bg-brand-green text-brand-dark font-bold rounded-lg text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} /> Add to Home Page
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                These brands will appear in Featured Brands section on the home page
+              </p>
+            </div>
+
+            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+              {featuredBrands.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Star size={48} className="mx-auto mb-3 text-gray-700" />
+                  <p>No featured brands yet</p>
+                  <p className="text-sm mt-1">Add brands to show on home page</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-brand-border">
+                  {featuredBrands.map((fb, index) => (
+                    <div key={fb.id} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <GripVertical size={16} />
+                        <span className="font-mono text-sm w-6">{fb.display_order}</span>
+                      </div>
+
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {fb.brand?.logo_url ? (
+                          <img src={fb.brand.logo_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-bold text-white">{fb.brand?.username?.[0] || 'B'}</span>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white text-sm truncate">
+                          {fb.brand?.username || 'Unknown Brand'}
+                        </p>
+                        <p className="text-xs text-gray-500 font-mono">
+                          {shortenAddress(fb.brand?.wallet_address || '', 6)}
+                        </p>
+                        <div className="flex gap-2 mt-1">
+                          {fb.brand?.is_official_verified && (
+                            <span className="text-[10px] bg-[#FFAD1F]/10 text-[#FFAD1F] px-1.5 py-0.5 rounded">Official</span>
+                          )}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            fb.is_active ? 'bg-brand-green/10 text-brand-green' : 'bg-gray-500/10 text-gray-400'
+                          }`}>
+                            {fb.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleFeaturedActive(fb.id, fb.is_active)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            fb.is_active
+                              ? 'bg-brand-green/10 text-brand-green border border-brand-green/20'
+                              : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                          }`}
+                        >
+                          {fb.is_active ? 'Active' : 'Inactive'}
+                        </button>
+                        <button 
+                          onClick={() => removeFeaturedBrand(fb.id)}
+                          className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                          title="Remove from featured"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Brand Logo Management */}
+          <div>
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <ImageIcon size={20} className="text-blue-400"/>
+              Brand Logo Management
+              <span className="ml-2 text-xs bg-blue-400/10 text-blue-400 border border-blue-400/20 px-2 py-0.5 rounded-full">
+                {users.filter((u: any) => u.role === 'brand' && u.is_verified).length} brands
+              </span>
+            </h2>
+            <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-brand-border bg-blue-400/5">
+                <p className="text-sm text-blue-400">
+                  Enter logo image URL manually (Imgur, Cloudinary, etc.). 
+                  No file upload - 100% safe for database.
+                </p>
+              </div>
+              
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {users
+                    .filter((u: any) => u.role === 'brand' && u.is_verified)
+                    .map((brand: any) => (
+                    <div key={brand.id} className="bg-brand-dark border border-brand-border rounded-xl p-4 hover:border-blue-400/30 transition-all">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center overflow-hidden border-2 border-brand-border flex-shrink-0">
+                          {logoUrls[brand.id] ? (
+                            <img 
+                              src={logoUrls[brand.id]} 
+                              alt={brand.username} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none'
+                              }}
+                            />
+                          ) : (
+                            <span className="text-2xl font-bold text-white">
+                              {brand.username?.[0]?.toUpperCase() || 'B'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-white text-sm truncate">
+                            {brand.username || 'Unnamed Brand'}
+                          </p>
+                          <p className="text-xs text-gray-500 font-mono">
+                            {shortenAddress(brand.wallet_address, 6)}
+                          </p>
+                          {brand.is_official_verified && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-[#FFAD1F]/10 text-[#FFAD1F] px-1.5 py-0.5 rounded mt-1">
+                              <Crown size={8} /> Official
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                          <input
+                            type="url"
+                            placeholder="https://i.imgur.com/..."
+                            defaultValue={logoUrls[brand.id] || ''}
+                            onBlur={(e) => updateLogoUrl(brand.id, e.target.value)}
+                            className="w-full bg-brand-card border border-brand-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 focus:border-blue-400/50 focus:outline-none"
+                          />
+                        </div>
+                        
+                        {logoUrls[brand.id] && (
+                          <button
+                            onClick={() => removeLogo(brand.id)}
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/20 transition-all"
+                          >
+                            <Trash2 size={14} /> Remove Logo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {users.filter((u: any) => u.role === 'brand' && u.is_verified).length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <ImageIcon size={48} className="mx-auto mb-3 text-gray-700" />
+                    <p>No verified brands found</p>
+                    <p className="text-sm mt-1">Approve brand applications first</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Top Submissions */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -681,21 +990,21 @@ export default function AdminDashboard() {
                                   value={editForm.likes} 
                                   onChange={e => setEditForm({...editForm, likes: parseInt(e.target.value) || 0})} 
                                   className="w-14 bg-brand-dark border border-brand-border rounded px-2 py-1 text-white" 
-                                  placeholder="❤️"
+                                  placeholder="Likes"
                                 />
                                 <input 
                                   type="number" 
                                   value={editForm.comments} 
                                   onChange={e => setEditForm({...editForm, comments: parseInt(e.target.value) || 0})} 
                                   className="w-14 bg-brand-dark border border-brand-border rounded px-2 py-1 text-white" 
-                                  placeholder="💬"
+                                  placeholder="Comments"
                                 />
                                 <input 
                                   type="number" 
                                   value={editForm.shares} 
                                   onChange={e => setEditForm({...editForm, shares: parseInt(e.target.value) || 0})} 
                                   className="w-14 bg-brand-dark border border-brand-border rounded px-2 py-1 text-white" 
-                                  placeholder="🔄"
+                                  placeholder="Shares"
                                 />
                               </div>
                             ) : (
@@ -725,13 +1034,13 @@ export default function AdminDashboard() {
                                   onClick={() => saveEngagement(sub.id)} 
                                   className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-3 py-1.5 rounded-lg font-semibold"
                                 >
-                                  💾 Save
+                                  Save
                                 </button>
                                 <button 
                                   onClick={() => setEditingSubmission(null)} 
                                   className="text-xs bg-gray-500/10 text-gray-400 border border-gray-400/20 px-3 py-1.5 rounded-lg font-semibold"
                                 >
-                                  ❌ Cancel
+                                  Cancel
                                 </button>
                               </div>
                             ) : (
@@ -740,13 +1049,13 @@ export default function AdminDashboard() {
                                   onClick={() => startEdit(sub)} 
                                   className="text-xs bg-blue-500/10 text-blue-400 border border-blue-400/20 px-3 py-1.5 rounded-lg font-semibold"
                                 >
-                                  ✏️ Edit
+                                  Edit
                                 </button>
                                 <button 
                                   onClick={() => deleteSubmission(sub.id)} 
                                   className="text-xs bg-red-500/10 text-red-400 border border-red-400/20 px-3 py-1.5 rounded-lg font-semibold"
                                 >
-                                  🗑️ Delete
+                                  Delete
                                 </button>
                               </div>
                             )}
@@ -773,7 +1082,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
+                  {users.slice(0, 20).map(u => (
                     <tr key={u.id} className="border-b border-brand-border/40 hover:bg-white/5">
                       <td className="px-4 py-3 font-mono text-brand-green text-xs">
                         {shortenAddress(u.wallet_address, 6)}
