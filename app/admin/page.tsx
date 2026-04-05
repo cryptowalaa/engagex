@@ -65,7 +65,7 @@ interface FeaturedBrand {
     wallet_address: string
     is_verified: boolean
     is_official_verified: boolean
-  }
+  } | null
 }
 
 export default function AdminDashboard() {
@@ -336,17 +336,29 @@ export default function AdminDashboard() {
         ? Math.max(...featuredBrands.map(f => f.display_order)) 
         : 0
       
-      await (supabase.from('featured_brands') as any)
+      console.log('Adding featured brand:', { brand_id: newFeaturedBrandId, display_order: maxOrder + 1 })
+      
+      const { data, error } = await (supabase.from('featured_brands') as any)
         .insert({ 
           brand_id: newFeaturedBrandId, 
           display_order: maxOrder + 1,
-          is_active: true
+          is_active: true,
+          created_at: new Date().toISOString()
         })
+        .select()
       
+      if (error) {
+        console.error('Insert error:', error)
+        toast.error(error.message || 'Failed to add featured brand')
+        return
+      }
+      
+      console.log('Insert success:', data)
       toast.success('Brand added to featured!')
       setNewFeaturedBrandId('')
       await load()
     } catch (e: any) {
+      console.error('Add featured brand error:', e)
       toast.error(e.message || 'Failed to add featured brand')
     }
   }
@@ -478,7 +490,6 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Badge Payments Section */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
@@ -589,7 +600,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Pending Missions */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Target size={20} className="text-brand-green"/>
@@ -666,7 +676,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Brand Applications */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Building2 size={20} className="text-yellow-400"/>
@@ -711,8 +720,8 @@ export default function AdminDashboard() {
                           <td className="px-4 py-4">
                             <div className="flex gap-2 text-xs">
                               {brand.discord_handle && <span className="bg-brand-purple/10 text-brand-purple px-2 py-0.5 rounded">Discord</span>}
-                              {brand.linkedin_url && <span className="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">LinkedIn</span>}
-                              {brand.telegram_handle && <span className="bg-blue-400/10 text-blue-300 px-2 py-0.5 rounded">Telegram</span>}
+                              {(brand as any).linkedin_url && <span className="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">LinkedIn</span>}
+                              {(brand as any).telegram_handle && <span className="bg-blue-400/10 text-blue-300 px-2 py-0.5 rounded">Telegram</span>}
                             </div>
                           </td>
                           <td className="px-4 py-4 text-gray-500 text-xs">
@@ -743,7 +752,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Featured Brands Management */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Star size={20} className="text-yellow-400"/>
@@ -772,7 +780,7 @@ export default function AdminDashboard() {
                 <button 
                   onClick={addFeaturedBrand}
                   disabled={!newFeaturedBrandId}
-                  className="px-4 py-2 bg-brand-green text-brand-dark font-bold rounded-lg text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="px-4 py-2 bg-brand-green text-brand-dark font-bold rounded-lg text-sm disabled:opacity-50 flex items-center justify-center gap-2 hover:bg-brand-green/90"
                 >
                   <Plus size={16} /> Add to Home Page
                 </button>
@@ -851,7 +859,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Brand Logo Management */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <ImageIcon size={20} className="text-blue-400"/>
@@ -942,7 +949,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Top Submissions */}
           <div>
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Trophy size={20} className="text-yellow-400"/>
@@ -1069,7 +1075,6 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Recent Users */}
           <div>
             <h2 className="text-xl font-bold mb-4">Recent Users</h2>
             <div className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
