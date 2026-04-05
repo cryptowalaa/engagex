@@ -1,4 +1,5 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useWallet } from '@solana/wallet-adapter-react'
@@ -33,6 +34,7 @@ interface FeaturedBrand {
   id: string
   brand_id: string
   display_order: number
+  is_active: boolean
   brand: {
     id: string
     username: string | null
@@ -40,7 +42,7 @@ interface FeaturedBrand {
     wallet_address: string
     is_verified: boolean
     is_official_verified: boolean
-  }
+  } | null
 }
 
 export default function Home() {
@@ -50,6 +52,7 @@ export default function Home() {
   const [featuredBrands, setFeaturedBrands] = useState<FeaturedBrand[]>([])
   const [selectedCreator, setSelectedCreator] = useState<TopCreator | null>(null)
   const [loading, setLoading] = useState(true)
+  const [brandsLoading, setBrandsLoading] = useState(false)
 
   useEffect(() => {
     const generated = Array.from({ length: 20 }, (_, i) => ({
@@ -84,46 +87,110 @@ export default function Home() {
   }
 
   async function loadFeaturedBrands() {
+    setBrandsLoading(true)
+    console.log('🔍 Loading featured brands...')
+    
     try {
-      const { data } = await (supabase.from('featured_brands') as any)
+      const { data, error } = await (supabase
+        .from('featured_brands') as any)
         .select(`
           id,
           brand_id,
           display_order,
+          is_active,
           brand:users(id, username, logo_url, wallet_address, is_verified, is_official_verified)
         `)
         .eq('is_active', true)
         .order('display_order', { ascending: true })
         .limit(10)
-      
+
+      console.log('📊 Query result:', { data, error })
+
+      if (error) {
+        console.error('❌ Query error:', error)
+        
+        const { data: fbData, error: fbError } = await (supabase
+          .from('featured_brands') as any)
+          .select('*')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true })
+        
+        if (fbError || !fbData || fbData.length === 0) {
+          console.log('⚠️ No featured brands found')
+          setFeaturedBrands([])
+          return
+        }
+
+        const brandIds = fbData.map((f: any) => f.brand_id)
+        const { data: usersData } = await (supabase
+          .from('users') as any)
+          .select('id, username, logo_url, wallet_address, is_verified, is_official_verified')
+          .in('id', brandIds)
+
+        const usersMap = (usersData || []).reduce((acc: any, u: any) => {
+          acc[u.id] = u
+          return acc
+        }, {})
+
+        const combined = fbData.map((f: any) => ({
+          ...f,
+          brand: usersMap[f.brand_id] || null
+        }))
+
+        console.log('✅ Fallback loaded:', combined)
+        setFeaturedBrands(combined)
+        return
+      }
+
+      console.log('✅ Featured brands loaded:', data)
       setFeaturedBrands(data || [])
     } catch (error) {
-      console.error('Load featured brands error:', error)
+      console.error('💥 Load featured brands error:', error)
+      setFeaturedBrands([])
+    } finally {
+      setBrandsLoading(false)
     }
   }
 
+  // FIXED: AvatarImage component with proper image handling
   const AvatarImage = ({ url, name, size = 80 }: { url: string | null, name: string | null, size?: number }) => {
     const [error, setError] = useState(false)
+    const [loaded, setLoaded] = useState(false)
     
     if (!url || error) {
       return (
-        <span className="text-xl md:text-2xl font-black text-brand-dark flex items-center justify-center w-full h-full">
-          {name?.[0]?.toUpperCase() || 'C'}
-        </span>
+        <div 
+          className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-green/30 to-brand-purple/30"
+        >
+          <span className="text-xl md:text-2xl font-black text-white">
+            {name?.[0]?.toUpperCase() || 'C'}
+          </span>
+        </div>
       )
     }
     
     return (
-      <img 
-        src={url} 
-        alt={name || 'User'} 
-        className="object-cover w-full h-full"
-        onError={() => setError(true)}
-      />
+      <div className="relative w-full h-full overflow-hidden">
+        {!loaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-green/30 to-brand-purple/30">
+            <span className="text-xl md:text-2xl font-black text-white">
+              {name?.[0]?.toUpperCase() || 'C'}
+            </span>
+          </div>
+        )}
+        <img 
+          src={url} 
+          alt={name || 'User'} 
+          className={`object-cover w-full h-full transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          onError={() => setError(true)}
+          onLoad={() => setLoaded(true)}
+        />
+      </div>
     )
   }
 
- const stats = [
+  // NEW:
+const stats = [
   { label: 'Total Missions', value: 'Beta', icon: Target },      // 250+ ki jagah Beta
   { label: 'Creators Paid', value: 'Coming Soon', icon: Trophy }, // $50K+ ki jagah Coming Soon
   { label: 'Community', value: 'Beta', icon: Users },             // 10K+ ki jagah Beta
@@ -148,12 +215,10 @@ export default function Home() {
     <div className="min-h-screen bg-brand-dark overflow-x-hidden">
       <Navbar />
 
-      {/* HERO SECTION - Mobile Optimized */}
       <section className="relative min-h-[80vh] md:min-h-screen flex items-center hero-bg grid-bg">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {particles.map((p, i) => <Particle key={i} style={p} />)}
         </div>
-        {/* Mobile-safe glow effects */}
         <div className="absolute top-1/4 left-1/4 w-48 h-48 md:w-96 md:h-96 rounded-full bg-brand-green/8 blur-3xl animate-pulse-slow pointer-events-none" />
         <div className="absolute bottom-1/4 right-1/4 w-40 h-40 md:w-80 md:h-80 rounded-full bg-brand-purple/8 blur-3xl animate-pulse-slow pointer-events-none" style={{ animationDelay: '2s' }} />
 
@@ -164,7 +229,6 @@ export default function Home() {
               <span className="text-brand-green text-xs md:text-sm font-medium">LIVE ON SOLANA MAINNET</span>
             </div>
 
-            {/* Mobile-responsive typography */}
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-tight md:leading-none mb-4 md:mb-6">
               <span className="text-white">The Attention</span>
               <br />
@@ -204,7 +268,6 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Stats - Stack on mobile */}
             <div className="grid grid-cols-2 md:flex md:flex-wrap gap-4 md:gap-10 mt-10 md:mt-16 pt-8 md:pt-10 border-t border-brand-border/50">
               {stats.map(({ label, value, icon: Icon }) => (
                 <div key={label} className="flex flex-col items-center md:items-start">
@@ -217,7 +280,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* TOP CREATORS - Mobile Optimized */}
       <section className="py-12 md:py-20 px-4 bg-brand-card/20 border-y border-brand-border">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-10 gap-4">
@@ -259,7 +321,8 @@ export default function Home() {
                     #{index + 1}
                   </div>
 
-                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center mx-auto mb-3 md:mb-4 overflow-hidden">
+                  {/* FIXED: Avatar container with flex center */}
+                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-brand-green to-brand-purple mx-auto mb-3 md:mb-4 overflow-hidden flex items-center justify-center">
                     <AvatarImage url={creator.avatar_url} name={creator.username} size={80} />
                   </div>
 
@@ -296,7 +359,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURED BRANDS - Mobile Optimized */}
       <section className="py-12 md:py-20 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-10 gap-4">
@@ -311,21 +373,48 @@ export default function Home() {
             </Link>
           </div>
 
-          {featuredBrands.length === 0 ? (
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <p className="text-xs text-yellow-400">
+                🔧 Debug: {featuredBrands.length} brands loaded | Loading: {brandsLoading ? 'Yes' : 'No'}
+              </p>
+              <button 
+                onClick={loadFeaturedBrands}
+                className="mt-2 px-3 py-1 bg-brand-purple/20 text-brand-purple rounded text-xs hover:bg-brand-purple/30"
+              >
+                🔄 Reload Brands
+              </button>
+            </div>
+          )}
+
+          {brandsLoading ? (
+            <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="w-36 sm:w-40 md:w-48 h-48 bg-brand-card rounded-2xl animate-pulse border border-brand-border flex-shrink-0" />
+              ))}
+            </div>
+          ) : featuredBrands.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Star size={40} className="mx-auto mb-4 text-gray-700" />
               <p className="text-sm md:text-base">No featured brands yet.</p>
               <p className="text-xs md:text-sm mt-2">Admin will add sponsored brands here.</p>
+              <button 
+                onClick={loadFeaturedBrands}
+                className="mt-4 px-4 py-2 bg-brand-purple/10 text-brand-purple rounded-lg text-sm hover:bg-brand-purple/20"
+              >
+                Try Loading Again
+              </button>
             </div>
           ) : (
-            <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide items-center">
+            <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide items-start">
               {featuredBrands.map((featured) => (
                 <Link 
                   key={featured.id}
                   href={`/brand/${featured.brand_id}`}
                   className="w-36 sm:w-40 md:w-48 bg-brand-card border border-brand-border rounded-2xl p-4 md:p-6 flex-shrink-0 snap-start hover:border-brand-purple/30 hover:shadow-[0_0_20px_rgba(155,89,255,0.1)] transition-all group text-center"
                 >
-                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center mx-auto mb-3 md:mb-4 overflow-hidden">
+                  {/* FIXED: Brand logo container with flex center */}
+                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-brand-purple to-brand-green mx-auto mb-3 md:mb-4 overflow-hidden flex items-center justify-center">
                     {featured.brand?.logo_url ? (
                       <img 
                         src={featured.brand.logo_url} 
@@ -343,7 +432,7 @@ export default function Home() {
                   </div>
 
                   <h3 className="font-bold text-white mb-2 text-sm md:text-base truncate">
-                    {featured.brand?.username || 'Anonymous'}
+                    {featured.brand?.username || 'Brand'}
                   </h3>
                   
                   <div className="flex items-center justify-center gap-1 mb-2 md:mb-3 flex-wrap">
@@ -365,7 +454,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURES - Mobile Optimized */}
       <section className="py-16 md:py-24 px-4 max-w-7xl mx-auto">
         <div className="text-center mb-10 md:mb-16">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-black mb-3 md:mb-4">
@@ -389,7 +477,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* HOW IT WORKS - Mobile Optimized */}
       <section className="py-16 md:py-24 px-4 bg-brand-card/30 border-y border-brand-border">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-10 md:mb-16">
@@ -413,7 +500,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* SCORE FORMULA - Mobile Optimized */}
       <section className="py-16 md:py-24 px-4 max-w-7xl mx-auto">
         <div className="bg-brand-card border border-brand-border rounded-2xl md:rounded-3xl p-6 md:p-10 lg:p-16 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-brand-green/5 to-brand-purple/5" />
@@ -451,7 +537,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA BANNER - Mobile Optimized */}
       <section className="py-16 md:py-20 px-4">
         <div className="max-w-3xl mx-auto text-center px-4">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-black mb-4 md:mb-6">
