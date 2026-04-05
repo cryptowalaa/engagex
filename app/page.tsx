@@ -18,6 +18,16 @@ function Particle({ style }: { style: React.CSSProperties }) {
   return <div className="particle" style={style} />
 }
 
+// ✅ NEW: Inline getImageUrl function
+function getImageUrl(imageUrl: string | null): string {
+  if (!imageUrl) return ''
+  if (imageUrl.startsWith('http')) return imageUrl
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) return imageUrl
+  const cleanPath = imageUrl.replace(/^(avatars|missions)\//, '')
+  return `${supabaseUrl}/storage/v1/object/public/avatars/${cleanPath}`
+}
+
 interface TopCreator {
   id: string
   wallet_address: string
@@ -76,7 +86,7 @@ export default function Home() {
         .order('total_earned', { ascending: false })
         .limit(10)
       
-      console.log('Top creators loaded:', data) // Debug log
+      console.log('Top creators loaded:', data)
       setTopCreators(data || [])
     } catch (error) {
       console.error('Load creators error:', error)
@@ -98,18 +108,21 @@ export default function Home() {
         .order('display_order', { ascending: true })
         .limit(10)
       
-      console.log('Featured brands loaded:', data) // Debug log
+      console.log('Featured brands loaded:', data)
       setFeaturedBrands(data || [])
     } catch (error) {
       console.error('Load featured brands error:', error)
     }
   }
 
-  // ✅ FIXED: Avatar component with proper fallback
+  // ✅ FIXED: Avatar component with getImageUrl
   const AvatarImage = ({ url, name, size = 80 }: { url: string | null, name: string | null, size?: number }) => {
     const [error, setError] = useState(false)
     
-    if (!url || error) {
+    // Use getImageUrl to properly format the URL
+    const imageUrl = getImageUrl(url)
+    
+    if (!imageUrl || error) {
       return (
         <span className="text-2xl font-black text-brand-dark flex items-center justify-center w-full h-full">
           {name?.[0]?.toUpperCase() || 'C'}
@@ -119,7 +132,7 @@ export default function Home() {
     
     return (
       <img 
-        src={url} 
+        src={imageUrl} 
         alt={name || 'User'} 
         className="object-cover w-full h-full"
         onError={() => setError(true)}
@@ -127,11 +140,11 @@ export default function Home() {
     )
   }
 
-  const stats = [
-    { label: 'Total Missions', value: '250+', icon: Target },
-    { label: 'Creators Paid', value: '$50K+', icon: Trophy },
-    { label: 'Community', value: '10K+', icon: Users },
-    { label: 'Avg APY', value: '340%', icon: TrendingUp },
+ const stats = [
+  { label: 'Total Missions', value: 'Beta', icon: Target },      // 250+ ki jagah Beta
+  { label: 'Creators Paid', value: 'Coming Soon', icon: Trophy }, // $50K+ ki jagah Coming Soon
+  { label: 'Community', value: 'Beta', icon: Users },             // 10K+ ki jagah Beta
+  // Avg APY 340% removed
   ]
 
   const features = [
@@ -216,7 +229,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* TOP CREATORS OF THE WEEK - FIXED IMAGES */}
+      {/* TOP CREATORS OF THE WEEK */}
       <section className="py-20 px-4 bg-brand-card/20 border-y border-brand-border">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-10">
@@ -258,7 +271,7 @@ export default function Home() {
                     #{index + 1}
                   </div>
 
-                  {/* ✅ FIXED: Using img tag with error handling */}
+                  {/* ✅ FIXED: Using AvatarImage with getImageUrl */}
                   <div className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center mx-auto mb-4 overflow-hidden">
                     <AvatarImage url={creator.avatar_url} name={creator.username} size={80} />
                   </div>
@@ -302,7 +315,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURED BRANDS - ADMIN SELECTED */}
+      {/* FEATURED BRANDS - ADMIN SELECTED - FIXED */}
       <section className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-10">
@@ -334,7 +347,7 @@ export default function Home() {
                   <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-brand-purple to-brand-green flex items-center justify-center mx-auto mb-4 overflow-hidden">
                     {featured.brand?.logo_url ? (
                       <img 
-                        src={featured.brand.logo_url} 
+                        src={getImageUrl(featured.brand.logo_url)}  // ✅ FIXED: Using getImageUrl
                         alt={featured.brand.username || 'Brand'} 
                         className="w-full h-full object-cover"
                         onError={(e) => {
