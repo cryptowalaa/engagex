@@ -7,7 +7,6 @@ import {
   FileText, Star, ExternalLink, Award 
 } from 'lucide-react'
 import { shortenAddress, formatUSDC } from '@/lib/utils/helpers'
-import Image from 'next/image'
 import Link from 'next/link'
 
 interface CreatorProfileModalProps {
@@ -71,6 +70,41 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
 
   if (!isOpen || !creator) return null
 
+  // FIXED: Avatar component with proper image handling
+  const AvatarImage = ({ url, name }: { url: string | null, name: string | null }) => {
+    const [error, setError] = useState(false)
+    const [loaded, setLoaded] = useState(false)
+    
+    if (!url || error) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-green to-brand-purple">
+          <span className="text-3xl font-black text-white">
+            {name?.[0]?.toUpperCase() || 'C'}
+          </span>
+        </div>
+      )
+    }
+    
+    return (
+      <div className="relative w-full h-full">
+        {!loaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-green to-brand-purple">
+            <span className="text-3xl font-black text-white">
+              {name?.[0]?.toUpperCase() || 'C'}
+            </span>
+          </div>
+        )}
+        <img 
+          src={url} 
+          alt={name || 'Creator'} 
+          className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          onError={() => setError(true)}
+          onLoad={() => setLoaded(true)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -91,21 +125,9 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
 
         {/* Header */}
         <div className="p-8 text-center border-b border-brand-border">
-          {/* Avatar */}
+          {/* FIXED: Avatar with AvatarImage component */}
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center mx-auto mb-4 overflow-hidden">
-            {creator.avatar_url ? (
-              <Image 
-                src={creator.avatar_url} 
-                alt={creator.username || 'Creator'} 
-                width={96} 
-                height={96}
-                className="object-cover w-full h-full"
-              />
-            ) : (
-              <span className="text-3xl font-black text-brand-dark">
-                {creator.username?.[0]?.toUpperCase() || 'C'}
-              </span>
-            )}
+            <AvatarImage url={creator.avatar_url} name={creator.username} />
           </div>
 
           <h2 className="text-2xl font-black text-white mb-1">
