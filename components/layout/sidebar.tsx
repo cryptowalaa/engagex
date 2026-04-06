@@ -62,7 +62,7 @@ export function Sidebar() {
         <div className="w-7 h-7 rounded-lg bg-brand-green flex items-center justify-center">
           <Zap size={14} className="text-brand-dark" />
         </div>
-        <span className="font-bold gradient-text">EngageX</span>
+        <span className="font-bold gradient-text">Engagez</span>
       </Link>
 
       {isAdmin && (
