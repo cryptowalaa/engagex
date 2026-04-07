@@ -166,12 +166,18 @@ export default function MissionsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-brand-dark">
+    <div className="min-h-screen bg-brand-dark relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-brand-green/5 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-brand-purple/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      </div>
+
       <Navbar />
       
-      <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
+      <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-10">
+          <div className="mb-10 text-center sm:text-left">
             <h1 className="text-4xl sm:text-5xl font-black mb-3">
               Available <span className="text-brand-green">Missions</span>
             </h1>
@@ -181,14 +187,14 @@ export default function MissionsPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 mb-8">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-green transition-colors" size={20} />
               <input
                 type="text"
                 placeholder="Search missions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-brand-card border border-brand-border rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-green/50"
+                className="w-full bg-brand-card/80 backdrop-blur-sm border border-brand-border rounded-xl pl-12 pr-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-green/50 focus:ring-1 focus:ring-brand-green/20 transition-all"
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -196,10 +202,10 @@ export default function MissionsPage() {
                 <button
                   key={filter.value}
                   onClick={() => setActiveFilter(filter.value)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
                     activeFilter === filter.value
-                      ? 'bg-brand-green text-brand-dark'
-                      : 'bg-brand-card border border-brand-border text-gray-400 hover:border-brand-green/30'
+                      ? 'bg-brand-green text-brand-dark shadow-lg shadow-brand-green/25'
+                      : 'bg-brand-card/80 backdrop-blur-sm border border-brand-border text-gray-400 hover:border-brand-green/30 hover:text-white'
                   }`}
                 >
                   {filter.label}
@@ -211,25 +217,28 @@ export default function MissionsPage() {
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-80 bg-brand-card rounded-2xl animate-pulse border border-brand-border" />
+                <div key={i} className="h-80 bg-brand-card/50 backdrop-blur-sm rounded-2xl animate-pulse border border-brand-border/50" />
               ))}
             </div>
           ) : filteredMissions.length === 0 ? (
             <div className="text-center py-20">
-              <Target size={48} className="text-gray-700 mx-auto mb-4" />
+              <div className="w-20 h-20 bg-brand-card/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-border">
+                <Target size={32} className="text-gray-600" />
+              </div>
               <p className="text-gray-400 text-lg">No missions found</p>
               <p className="text-gray-500 text-sm mt-2">Try adjusting your search or filters</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredMissions.map((mission) => {
+              {filteredMissions.map((mission, index) => {
                 const { status: displayStatus, isExpired } = getDisplayStatus(mission)
                 
                 return (
                   <Link
                     key={mission.id}
                     href={`/missions/${mission.id}`}
-                    className="group bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-green/30 transition-all duration-300 card-hover"
+                    className="group bg-brand-card/80 backdrop-blur-sm border border-brand-border rounded-2xl overflow-hidden hover:border-brand-green/30 hover:shadow-xl hover:shadow-brand-green/5 transition-all duration-300 hover:-translate-y-1"
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="h-48 bg-brand-dark relative overflow-hidden">
                       {mission.image_url ? (
@@ -237,7 +246,7 @@ export default function MissionsPage() {
                           src={getImageUrl(mission.image_url)}
                           alt={mission.title}
                           fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
                           onError={(e) => {
                             ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                           }}
@@ -248,8 +257,10 @@ export default function MissionsPage() {
                           <Target size={48} />
                         </div>
                       )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-brand-card/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      
                       <div className="absolute top-3 left-3">
-                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                        <span className={`px-3 py-1.5 text-xs font-bold rounded-full backdrop-blur-sm ${
                           isExpired 
                             ? 'bg-red-500/90 text-white' 
                             : 'bg-brand-green/90 text-brand-dark'
@@ -257,6 +268,15 @@ export default function MissionsPage() {
                           {displayStatus}
                         </span>
                       </div>
+
+                      {/* Category Tag */}
+                      {mission.category && (
+                        <div className="absolute top-3 right-3">
+                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-black/50 backdrop-blur-sm text-white border border-white/10">
+                            {mission.category}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="p-5">
@@ -266,11 +286,11 @@ export default function MissionsPage() {
                           className="flex items-center gap-2 group/brand"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="w-6 h-6 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold group-hover/brand:scale-110 transition-transform overflow-hidden">
+                          <div className="w-7 h-7 rounded-full bg-brand-purple/20 flex items-center justify-center text-xs text-brand-purple font-bold group-hover/brand:scale-110 transition-transform overflow-hidden border border-brand-purple/30">
                             <AvatarImage 
                               url={mission.brand?.logo_url || mission.brand?.avatar_url} 
                               name={mission.brand?.username} 
-                              size={24} 
+                              size={28} 
                             />
                           </div>
                           <span className="text-sm text-gray-400 group-hover/brand:text-brand-green transition-colors">
@@ -293,26 +313,27 @@ export default function MissionsPage() {
                         )}
                       </div>
 
-                      <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 group-hover:text-brand-green transition-colors">
+                      <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 group-hover:text-brand-green transition-colors duration-300">
                         {mission.title}
                       </h3>
                       <p className="text-gray-400 text-sm line-clamp-2 mb-4">
                         {mission.description}
                       </p>
 
-                      <div className="flex items-center justify-between pt-4 border-t border-brand-border">
+                      <div className="flex items-center justify-between pt-4 border-t border-brand-border/50">
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Reward Pool</p>
-                          <p className="text-brand-green font-black text-lg">
+                          <p className="text-brand-green font-black text-lg flex items-center gap-1">
+                            <span className="text-sm">$</span>
                             {formatUSDC(mission.reward_pool)}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <div className="flex items-center gap-1 text-gray-500 text-xs mb-1">
+                        <div className="text-right space-y-1">
+                          <div className={`flex items-center gap-1.5 text-xs ${isExpired ? 'text-red-400' : 'text-gray-400'}`}>
                             <Clock size={12} />
                             {isExpired ? 'Expired' : timeUntil(mission.deadline)}
                           </div>
-                          <div className="flex items-center gap-1 text-gray-500 text-xs">
+                          <div className="flex items-center gap-1.5 text-gray-500 text-xs">
                             <Users size={12} />
                             Max {mission.max_winners} winners
                           </div>
