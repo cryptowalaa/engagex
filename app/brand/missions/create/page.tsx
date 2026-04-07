@@ -1,11 +1,12 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useWallet, useConnection } from '@solana/wallet-adapter-react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Navbar } from '@/components/layout/navbar'
-import { Target, Plus, ImageIcon, Check, Sparkles, Loader2, Star, Wallet, ArrowRight, AlertCircle } from 'lucide-react'
+import { Target, Plus, ImageIcon, Check, Sparkles, Loader2, Star, Wallet, ArrowRight, AlertCircle, MessageCircle, Clock, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { MISSION_CATEGORIES } from '@/lib/config'
 import { PublicKey, Transaction } from '@solana/web3.js'
@@ -375,6 +376,58 @@ export default function CreateMission() {
     </div>
   )
 
+  // Refund Policy Box Component - NEW
+  const RefundPolicyBox = () => (
+    <div className="bg-[#0d1117] border border-[#30363d] rounded-2xl p-6 mt-6">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+          <Shield size={20} className="text-blue-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-white">Refund Policy</h3>
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <Clock size={12} />
+            <span>12 Hour Window</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="space-y-3 text-sm text-gray-400 mb-5">
+        <p>
+          You can request a full refund and cancel your mission within 
+          <span className="text-blue-400 font-semibold"> 12 hours </span> 
+          of payment.
+        </p>
+        <p>
+          After 12 hours, the reward pool becomes 
+          <span className="text-red-400 font-semibold"> non-refundable </span> 
+          and the mission will be activated.
+        </p>
+      </div>
+
+      <a 
+        href="https://t.me/Wajid_Sol" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="w-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-500/20 transition-all group"
+      >
+        <MessageCircle size={18} className="group-hover:scale-110 transition-transform" />
+        <span>Request Refund on Telegram</span>
+        <span className="text-xs opacity-70">@Wajid_Sol</span>
+      </a>
+
+      <div className="mt-4 pt-4 border-t border-[#30363d]">
+        <div className="flex items-start gap-2 text-xs text-gray-500">
+          <AlertCircle size={14} className="flex-shrink-0 mt-0.5 text-yellow-500" />
+          <p>
+            To cancel: Message us on Telegram with your mission ID and wallet address. 
+            Refunds are processed within 24 hours.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+
   // Badge Box Component
   const BadgeBox = () => {
     if (checkingBadge) {
@@ -584,8 +637,10 @@ export default function CreateMission() {
               </div>
 
               <div className="lg:col-span-1">
-                <div className="sticky top-24">
+                <div className="sticky top-24 space-y-6">
                   <BadgeBox />
+                  {/* NEW: Refund Policy Box */}
+                  <RefundPolicyBox />
                 </div>
               </div>
             </div>
