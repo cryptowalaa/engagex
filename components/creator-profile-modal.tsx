@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { 
   X, Twitter, Globe, MessageCircle, Trophy, 
-  FileText, Star, ExternalLink, Award 
+  FileText, Star, ExternalLink, Award, UserPlus, UserCheck, Loader2, Users
 } from 'lucide-react'
 import { shortenAddress, formatUSDC } from '@/lib/utils/helpers'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 
 interface CreatorProfileModalProps {
   creator: {
@@ -20,9 +21,12 @@ interface CreatorProfileModalProps {
     discord_handle: string | null
     total_earned: number
     total_points: number
+    followers_count?: number  // ✅ نیا field
+    following_count?: number  // ✅ نیا field
   } | null
   isOpen: boolean
   onClose: () => void
+  currentUserId?: string | null
 }
 
 interface Submission {
@@ -33,44 +37,117 @@ interface Submission {
   platform: string
 }
 
-export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfileModalProps) {
+export function CreatorProfileModal({ creator, isOpen, onClose, currentUserId }: CreatorProfileModalProps) {
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loading, setLoading] = useState(false)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [followerCount, setFollowerCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
 
   useEffect(() => {
     if (!creator || !isOpen) return
     
-    async function loadSubmissions() {
-      setLoading(true)
-      try {
-        const { data } = await (supabase.from('submissions') as any)
-          .select('id, score, status, platform, mission:missions(title)')
-          .eq('creator_id', creator.id)
-          .order('score', { ascending: false })
-          .limit(5)
-        
-        const formatted = data?.map((sub: any) => ({
-          id: sub.id,
-          mission_title: sub.mission?.title || 'Unknown Mission',
-          score: sub.score || 0,
-          status: sub.status,
-          platform: sub.platform
-        })) || []
-        
-        setSubmissions(formatted)
-      } catch (error) {
-        console.error('Load submissions error:', error)
-      } finally {
-        setLoading(false)
-      }
+    // ✅ Creator کے followers/following count set کریں
+    setFollowerCount(creator.followers_count || 0)
+    setFollowingCount(creator.following_count || 0)
+    
+    checkFollowStatus()
+    loadSubmissions()
+  }, [creator, isOpen, currentUserId])
+
+  async function checkFollowStatus() {
+    if (!currentUserId || !creator || currentUserId === creator.id) return
+    
+    try {
+      const { data } = await (supabase.from('follows') as any)
+        .select('id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', creator.id)
+        .maybeSingle()
+      
+      setIsFollowing(!!data)
+    } catch (e) {
+      console.error('Check follow error:', e)
+    }
+  }
+
+  async function handleFollow() {
+    if (!currentUserId || !creator) {
+      toast.error('Please connect wallet first')
+      return
     }
     
-    loadSubmissions()
-  }, [creator, isOpen])
+    if (currentUserId === creator.id) {
+      toast.error('You cannot follow yourself')
+      return
+    }
+
+    setFollowLoading(true)
+    try {
+      if (isFollowing) {
+        // Unfollow
+        const { error } = await (supabase.from('follows') as any)
+          .delete()
+          .eq('follower_id', currentUserId)
+          .eq('following_id', creator.id)
+        
+        if (error) throw error
+        
+        setIsFollowing(false)
+        setFollowerCount(prev => Math.max(0, prev - 1))
+        toast.success('Unfollowed')
+      } else {
+        // Follow
+        const { error } = await (supabase.from('follows') as any)
+          .insert({
+            follower_id: currentUserId,
+            following_id: creator.id,
+            created_at: new Date().toISOString()
+          })
+        
+        if (error) throw error
+        
+        setIsFollowing(true)
+        setFollowerCount(prev => prev + 1)
+        toast.success('Following now!')
+      }
+    } catch (e: any) {
+      console.error('Follow error:', e)
+      toast.error(e.message || 'Failed to update follow status')
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
+  async function loadSubmissions() {
+    setLoading(true)
+    try {
+      const { data } = await (supabase.from('submissions') as any)
+        .select('id, score, status, platform, mission:missions(title)')
+        .eq('creator_id', creator!.id)
+        .order('score', { ascending: false })
+        .limit(5)
+      
+      const formatted = data?.map((sub: any) => ({
+        id: sub.id,
+        mission_title: sub.mission?.title || 'Unknown Mission',
+        score: sub.score || 0,
+        status: sub.status,
+        platform: sub.platform
+      })) || []
+      
+      setSubmissions(formatted)
+    } catch (error) {
+      console.error('Load submissions error:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!isOpen || !creator) return null
 
-  // FIXED: Avatar component with proper image handling
+  // Avatar component with proper image handling
   const AvatarImage = ({ url, name }: { url: string | null, name: string | null }) => {
     const [error, setError] = useState(false)
     const [loaded, setLoaded] = useState(false)
@@ -105,6 +182,8 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
     )
   }
 
+  const showFollowButton = currentUserId && currentUserId !== creator.id
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -125,7 +204,7 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
 
         {/* Header */}
         <div className="p-8 text-center border-b border-brand-border">
-          {/* FIXED: Avatar with AvatarImage component */}
+          {/* Avatar */}
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center mx-auto mb-4 overflow-hidden">
             <AvatarImage url={creator.avatar_url} name={creator.username} />
           </div>
@@ -138,6 +217,68 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
             {shortenAddress(creator.wallet_address, 8)}
           </p>
 
+          {/* ============================================ */}
+          {/* ✅ FOLLOW STATS - یہاں دکھائے جائیں گے */}
+          {/* ============================================ */}
+          <div className="flex justify-center items-center gap-6 mb-4">
+            {/* Followers Count */}
+            <div className="text-center">
+              <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                <Users size={14} />
+                <span className="text-xs uppercase tracking-wider">Followers</span>
+              </div>
+              <span className="text-xl font-black text-white">
+                {followerCount.toLocaleString()}
+              </span>
+            </div>
+            
+            {/* Divider */}
+            <div className="w-px h-8 bg-brand-border" />
+            
+            {/* Following Count */}
+            <div className="text-center">
+              <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                <Users size={14} />
+                <span className="text-xs uppercase tracking-wider">Following</span>
+              </div>
+              <span className="text-xl font-black text-white">
+                {followingCount.toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          {/* Follow Button - نیا */}
+          {showFollowButton && (
+            <div className="flex justify-center mb-4">
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`
+                  flex items-center gap-2 font-semibold rounded-xl transition-all duration-200 px-6 py-3 text-base
+                  ${isFollowing 
+                    ? 'bg-brand-green/10 text-brand-green border border-brand-green/30 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30' 
+                    : 'bg-brand-green text-brand-dark hover:bg-opacity-90'
+                  }
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
+              >
+                {followLoading ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : isFollowing ? (
+                  <>
+                    <UserCheck size={20} />
+                    <span>Following</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={20} />
+                    <span>Follow</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           {creator.bio && (
             <p className="text-gray-400 text-sm max-w-sm mx-auto mb-4">
               {creator.bio}
@@ -145,7 +286,7 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
           )}
 
           {/* Social Links */}
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center gap-3 flex-wrap">
             {creator.twitter_handle && (
               <a 
                 href={`https://x.com/${creator.twitter_handle.replace('@', '')}`}
@@ -167,7 +308,7 @@ export function CreatorProfileModal({ creator, isOpen, onClose }: CreatorProfile
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats Grid - یہاں بھی followers/following دکھا سکتے ہیں (optional) */}
         <div className="grid grid-cols-3 gap-4 p-6 border-b border-brand-border">
           <div className="text-center">
             <div className="w-10 h-10 rounded-xl bg-brand-green/10 flex items-center justify-center mx-auto mb-2">
