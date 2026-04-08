@@ -13,6 +13,9 @@ import {
 import { shortenAddress, formatUSDC } from '@/lib/utils/helpers'
 import Image from 'next/image'
 import Link from 'next/link'
+import { FollowButton } from '@/components/follow/follow-button'
+import { FollowStats } from '@/components/follow/follow-stats'
+import { useWallet } from '@solana/wallet-adapter-react'
 
 // Inline getImageUrl function
 function getImageUrl(imageUrl: string | null): string {
@@ -36,6 +39,8 @@ interface CreatorProfile {
   website_url: string | null
   total_earned: number
   total_points: number
+  followers_count: number
+  following_count: number
   created_at: string
 }
 
@@ -65,11 +70,13 @@ interface Achievement {
 export default function CreatorProfilePage() {
   const params = useParams()
   const creatorId = params.id as string
+  const { publicKey } = useWallet()
   
   const [creator, setCreator] = useState<CreatorProfile | null>(null)
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [achievements, setAchievements] = useState<Achievement[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [stats, setStats] = useState({
     totalMissions: 0,
     winRate: 0,
@@ -82,12 +89,26 @@ export default function CreatorProfilePage() {
     loadCreatorProfile()
   }, [creatorId])
 
+  useEffect(() => {
+    if (publicKey) {
+      loadCurrentUser()
+    }
+  }, [publicKey])
+
+  async function loadCurrentUser() {
+    const { data } = await (supabase.from('users') as any)
+      .select('id')
+      .eq('wallet_address', publicKey?.toBase58())
+      .single()
+    setCurrentUser(data)
+  }
+
   async function loadCreatorProfile() {
     setLoading(true)
     try {
-      // Load creator info
+      // Load creator info with follow counts
       const { data: creatorData } = await (supabase.from('users') as any)
-        .select('id, wallet_address, username, avatar_url, bio, twitter_handle, discord_handle, telegram_handle, website_url, total_earned, total_points, created_at')
+        .select('id, wallet_address, username, avatar_url, bio, twitter_handle, discord_handle, telegram_handle, website_url, total_earned, total_points, followers_count, following_count, created_at')
         .eq('id', creatorId)
         .single()
       
@@ -147,7 +168,7 @@ export default function CreatorProfilePage() {
         totalEngagement
       })
 
-      // Load achievements (mock data - you can create a real achievements table)
+      // Load achievements
       setAchievements([
         { id: '1', title: 'First Submission', description: 'Submitted first content', icon: '🎯', earned_at: creatorData.created_at },
         { id: '2', title: 'Rising Star', description: 'Earned 1000+ points', icon: '⭐', earned_at: creatorData.created_at },
@@ -218,7 +239,7 @@ export default function CreatorProfilePage() {
           {/* Profile Header */}
           <div className="bg-brand-card border border-brand-border rounded-2xl p-8 mb-8">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              {/* Avatar - FIXED with getImageUrl */}
+              {/* Avatar */}
               <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-brand-green to-brand-purple flex items-center justify-center text-brand-dark font-black text-5xl overflow-hidden flex-shrink-0">
                 {creator.avatar_url ? (
                   <Image 
@@ -247,11 +268,31 @@ export default function CreatorProfilePage() {
                     <Trophy size={12} className="fill-current" />
                     Creator
                   </span>
+                  
+                  {/* Follow Button - نیا */}
+                  {currentUser && currentUser.id !== creator.id && (
+                    <FollowButton 
+                      targetUserId={creator.id}
+                      currentUserId={currentUser.id}
+                      size="md"
+                      showCount={true}
+                      followerCount={creator.followers_count || 0}
+                    />
+                  )}
                 </div>
                 
                 <p className="text-brand-green font-mono text-sm mb-3">
                   {shortenAddress(creator.wallet_address, 8)}
                 </p>
+
+                {/* Follow Stats - نیا */}
+                <div className="mb-4">
+                  <FollowStats 
+                    followersCount={creator.followers_count || 0}
+                    followingCount={creator.following_count || 0}
+                    compact={true}
+                  />
+                </div>
 
                 {creator.bio && (
                   <p className="text-gray-400 max-w-2xl mb-4">{creator.bio}</p>
