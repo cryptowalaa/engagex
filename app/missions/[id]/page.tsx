@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Navbar } from '@/components/layout/navbar'
 import { Footer } from '@/components/layout/footer'
 import { SubmissionForm } from '@/components/submissions/submission-form'
-import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, CheckCircle, TrendingUp, Link as LinkIcon, Medal, Loader2 } from 'lucide-react'
+import { Clock, Users, Trophy, ExternalLink, Heart, MessageCircle, Share2, CheckCircle, TrendingUp, Link as LinkIcon, Medal, Loader2, UserPlus, UserCheck } from 'lucide-react'
 import { timeUntil, formatUSDC, shortenAddress } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -107,31 +107,33 @@ function TopCreatorCard({ entry, index }: { entry: any, index: number }) {
   const rankIcons = ['🥇', '🥈', '🥉']
   
   return (
-    <div className={`flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${colors[index]} border hover:scale-105 transition-transform cursor-pointer group`}>
-      <div className="text-2xl">{rankIcons[index]}</div>
-      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-white/10">
-        {entry.creator?.avatar_url ? (
-          <Image 
-            src={getImageUrl(entry.creator.avatar_url)}
-            alt={entry.creator?.username || 'Creator'}
-            width={40}
-            height={40}
-            className="object-cover w-full h-full"
-            unoptimized
-          />
-        ) : (
-          <span className="text-sm font-bold text-white">
-            {(entry.creator?.username || 'C')[0].toUpperCase()}
-          </span>
-        )}
+    <Link href={`/creator/${entry.creator?.id}`}>
+      <div className={`flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${colors[index]} border hover:scale-105 transition-transform cursor-pointer group`}>
+        <div className="text-2xl">{rankIcons[index]}</div>
+        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden border border-white/10">
+          {entry.creator?.avatar_url ? (
+            <Image 
+              src={getImageUrl(entry.creator.avatar_url)}
+              alt={entry.creator?.username || 'Creator'}
+              width={40}
+              height={40}
+              className="object-cover w-full h-full"
+              unoptimized
+            />
+          ) : (
+            <span className="text-sm font-bold text-white">
+              {(entry.creator?.username || 'C')[0].toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-white text-sm truncate group-hover:text-emerald-400 transition-colors">
+            {entry.creator?.username || shortenAddress(entry.creator?.wallet_address || '', 4)}
+          </p>
+          <p className="text-xs text-gray-400">{entry.score?.toFixed(0) || 0} pts</p>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-white text-sm truncate group-hover:text-emerald-400 transition-colors">
-          {entry.creator?.username || shortenAddress(entry.creator?.wallet_address || '', 4)}
-        </p>
-        <p className="text-xs text-gray-400">{entry.score?.toFixed(0) || 0} pts</p>
-      </div>
-    </div>
+    </Link>
   )
 }
 
@@ -143,10 +145,102 @@ interface Comment {
   text: string
   created_at: string
   user?: {
+    id: string
     username: string | null
     wallet_address: string
     avatar_url: string | null
+    followers_count?: number
   }
+}
+
+// Follow Button for Comments - نیا component
+function CommentFollowButton({ 
+  targetUserId, 
+  currentUserId 
+}: { 
+  targetUserId: string
+  currentUserId: string | null 
+}) {
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!currentUserId || currentUserId === targetUserId) return
+    checkStatus()
+  }, [currentUserId, targetUserId])
+
+  async function checkStatus() {
+    const { data } = await (supabase.from('follows') as any)
+      .select('id')
+      .eq('follower_id', currentUserId)
+      .eq('following_id', targetUserId)
+      .maybeSingle()
+    setIsFollowing(!!data)
+  }
+
+  async function handleFollow(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!currentUserId) {
+      toast.error('Connect wallet first')
+      return
+    }
+
+    setLoading(true)
+    try {
+      if (isFollowing) {
+        await (supabase.from('follows') as any)
+          .delete()
+          .eq('follower_id', currentUserId)
+          .eq('following_id', targetUserId)
+        setIsFollowing(false)
+        toast.success('Unfollowed')
+      } else {
+        await (supabase.from('follows') as any)
+          .insert({
+            follower_id: currentUserId,
+            following_id: targetUserId,
+            created_at: new Date().toISOString()
+          })
+        setIsFollowing(true)
+        toast.success('Following!')
+      }
+    } catch (e) {
+      toast.error('Failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!currentUserId || currentUserId === targetUserId) return null
+
+  return (
+    <button
+      onClick={handleFollow}
+      disabled={loading}
+      className={`
+        ml-2 px-2 py-1 rounded-lg text-xs font-medium transition-all
+        ${isFollowing 
+          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+          : 'bg-slate-800 text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400 border border-transparent hover:border-emerald-500/30'
+        }
+        disabled:opacity-50
+      `}
+    >
+      {loading ? (
+        <Loader2 size={12} className="animate-spin" />
+      ) : isFollowing ? (
+        <span className="flex items-center gap-1">
+          <UserCheck size={12} /> Following
+        </span>
+      ) : (
+        <span className="flex items-center gap-1">
+          <UserPlus size={12} /> Follow
+        </span>
+      )}
+    </button>
+  )
 }
 
 export default function MissionDetailPage() {
@@ -182,7 +276,7 @@ export default function MissionDetailPage() {
     try {
       // Load mission
       const { data: m, error: mError } = await (supabase.from('missions') as any)
-        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url, logo_url)')
+        .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url, logo_url, followers_count, following_count)')
         .eq('id', id)
         .single()
       
@@ -273,7 +367,7 @@ export default function MissionDetailPage() {
         .from('comments') as any)
         .select(`
           *,
-          user:users(username, wallet_address, avatar_url)
+          user:users(id, username, wallet_address, avatar_url, followers_count)
         `)
         .in('submission_id', submissionIds)
         .order('created_at', { ascending: false })
@@ -549,47 +643,57 @@ export default function MissionDetailPage() {
                   </div>
                 )}
                 
-                {/* Brand Header */}
-                <Link 
-                  href={`/brand/${mission.brand?.id}`}
-                  className="flex items-center gap-3 mb-4 p-3 -ml-3 rounded-xl hover:bg-white/5 transition-all group"
-                >
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform overflow-hidden border border-white/10">
-                    {mission.brand?.logo_url || mission.brand?.avatar_url ? (
-                      <Image 
-                        src={getImageUrl(mission.brand.logo_url || mission.brand.avatar_url)}
-                        alt={mission.brand?.username || 'Brand'} 
-                        width={48} 
-                        height={48}
-                        className="object-cover w-full h-full"
-                        unoptimized
-                      />
-                    ) : (
-                      mission.brand?.username?.[0]?.toUpperCase() || 'B'
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-white font-semibold group-hover:text-emerald-400 transition-colors">
-                        {mission.brand?.username || shortenAddress(mission.brand?.wallet_address || '', 4)}
-                      </p>
-                      {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
-                        <span className="flex items-center gap-1 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                          <CheckCircle size={12} className="fill-current" />
-                          Verified
-                        </span>
-                      )}
-                      {mission.brand?.is_official_verified && (
-                        <span className="flex items-center gap-1 text-xs bg-[#FFAD1F]/10 text-[#FFAD1F] border border-[#FFAD1F]/20 px-2 py-0.5 rounded-full">
-                          <span className="w-3 h-3 bg-[#FFAD1F] rounded-full flex items-center justify-center text-[8px] text-slate-950 font-bold">✓</span>
-                          Official
-                        </span>
+                {/* Brand Header with Follow Button - نیا */}
+                <div className="flex items-center justify-between mb-4">
+                  <Link 
+                    href={`/brand/${mission.brand?.id}`}
+                    className="flex items-center gap-3 p-3 -ml-3 rounded-xl hover:bg-white/5 transition-all group flex-1"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform overflow-hidden border border-white/10">
+                      {mission.brand?.logo_url || mission.brand?.avatar_url ? (
+                        <Image 
+                          src={getImageUrl(mission.brand.logo_url || mission.brand.avatar_url)}
+                          alt={mission.brand?.username || 'Brand'} 
+                          width={48} 
+                          height={48}
+                          className="object-cover w-full h-full"
+                          unoptimized
+                        />
+                      ) : (
+                        mission.brand?.username?.[0]?.toUpperCase() || 'B'
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">Brand · Click to view profile</p>
-                  </div>
-                  <ExternalLink size={16} className="text-gray-500 group-hover:text-emerald-400 transition-colors" />
-                </Link>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-white font-semibold group-hover:text-emerald-400 transition-colors">
+                          {mission.brand?.username || shortenAddress(mission.brand?.wallet_address || '', 4)}
+                        </p>
+                        {mission.brand?.is_verified && !mission.brand?.is_official_verified && (
+                          <span className="flex items-center gap-1 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                            <CheckCircle size={12} className="fill-current" />
+                            Verified
+                          </span>
+                        )}
+                        {mission.brand?.is_official_verified && (
+                          <span className="flex items-center gap-1 text-xs bg-[#FFAD1F]/10 text-[#FFAD1F] border border-[#FFAD1F]/20 px-2 py-0.5 rounded-full">
+                            <span className="w-3 h-3 bg-[#FFAD1F] rounded-full flex items-center justify-center text-[8px] text-slate-950 font-bold">✓</span>
+                            Official
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">Brand · Click to view profile</p>
+                    </div>
+                    <ExternalLink size={16} className="text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                  </Link>
+                  
+                  {/* Brand Follow Button - نیا */}
+                  {currentUser && currentUser.id !== mission.brand?.id && (
+                    <CommentFollowButton 
+                      targetUserId={mission.brand?.id}
+                      currentUserId={currentUser?.id || null}
+                    />
+                  )}
+                </div>
                 
                 <div className="flex items-start justify-between mb-4">
                   <span className={`text-xs px-3 py-1 rounded-full font-medium ${badgeClass}`}>
@@ -661,7 +765,7 @@ export default function MissionDetailPage() {
                           {/* Submission Header */}
                           <div className="p-4 border-b border-slate-800">
                             <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-3">
+                              <Link href={`/creator/${sub.creator?.id}`} className="flex items-center gap-3 group/creator">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
                                   i===0 ? 'bg-yellow-500 text-black' : 
                                   i===1 ? 'bg-gray-400 text-black' : 
@@ -671,7 +775,7 @@ export default function MissionDetailPage() {
                                   {i < 3 ? <Medal size={16} /> : i + 1}
                                 </div>
                                 <div>
-                                  <p className="text-white font-semibold flex items-center gap-2">
+                                  <p className="text-white font-semibold flex items-center gap-2 group-hover/creator:text-emerald-400 transition-colors">
                                     {sub.creator?.username || shortenAddress(sub.creator?.wallet_address || '', 4)}
                                     {sub.creator?.is_verified && (
                                       <CheckCircle size={14} className="text-emerald-400 fill-current" />
@@ -679,7 +783,7 @@ export default function MissionDetailPage() {
                                   </p>
                                   <span className="text-xs text-gray-500 capitalize">{sub.platform}</span>
                                 </div>
-                              </div>
+                              </Link>
                               <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-1.5 rounded-full border border-emerald-500/20">
                                 <span className="text-emerald-400 font-bold text-lg">{Number(sub.score || 0).toFixed(0)}</span>
                                 <span className="text-xs text-emerald-500/70">pts</span>
@@ -784,35 +888,48 @@ export default function MissionDetailPage() {
                             )}
                           </div>
 
-                          {/* Comments Section */}
+                          {/* Comments Section with Follow Button - نیا */}
                           {submissionComments.length > 0 && (
                             <div className="px-4 py-3 bg-slate-950/30 border-t border-slate-800">
                               <h4 className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider">Comments</h4>
                               <div className="space-y-3">
                                 {submissionComments.slice(0, 3).map((comment) => (
                                   <div key={comment.id} className="flex gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-gray-400 overflow-hidden">
-                                      {comment.user?.avatar_url ? (
-                                        <Image 
-                                          src={getImageUrl(comment.user.avatar_url)}
-                                          alt={comment.user?.username || 'User'}
-                                          width={32}
-                                          height={32}
-                                          className="object-cover w-full h-full"
-                                          unoptimized
-                                        />
-                                      ) : (
-                                        (comment.user?.username || 'U')[0].toUpperCase()
-                                      )}
-                                    </div>
+                                    <Link href={`/creator/${comment.user_id}`}>
+                                      <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-gray-400 overflow-hidden hover:ring-2 hover:ring-emerald-500/50 transition-all">
+                                        {comment.user?.avatar_url ? (
+                                          <Image 
+                                            src={getImageUrl(comment.user.avatar_url)}
+                                            alt={comment.user?.username || 'User'}
+                                            width={32}
+                                            height={32}
+                                            className="object-cover w-full h-full"
+                                            unoptimized
+                                          />
+                                        ) : (
+                                          (comment.user?.username || 'U')[0].toUpperCase()
+                                        )}
+                                      </div>
+                                    </Link>
                                     <div className="flex-1 bg-slate-900/50 rounded-lg p-3">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-sm font-medium text-white">
-                                          {comment.user?.username || shortenAddress(comment.user?.wallet_address || '', 4)}
-                                        </span>
-                                        <span className="text-xs text-gray-600">
-                                          {new Date(comment.created_at).toLocaleDateString()}
-                                        </span>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center gap-2">
+                                          <Link href={`/creator/${comment.user_id}`}>
+                                            <span className="text-sm font-medium text-white hover:text-emerald-400 transition-colors">
+                                              {comment.user?.username || shortenAddress(comment.user?.wallet_address || '', 4)}
+                                            </span>
+                                          </Link>
+                                          
+                                          {/* Follow Button for Commenter - نیا */}
+                                          <CommentFollowButton 
+                                            targetUserId={comment.user_id}
+                                            currentUserId={currentUser?.id || null}
+                                          />
+                                          
+                                          <span className="text-xs text-gray-600">
+                                            {new Date(comment.created_at).toLocaleDateString()}
+                                          </span>
+                                        </div>
                                       </div>
                                       <p className="text-sm text-gray-300">{comment.text}</p>
                                     </div>
