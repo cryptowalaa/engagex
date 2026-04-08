@@ -8,6 +8,9 @@ import { Target, ExternalLink, CheckCircle, Globe, Award, TrendingUp } from 'luc
 import { shortenAddress, formatUSDC, timeUntil } from '@/lib/utils/helpers'
 import Link from 'next/link'
 import Image from 'next/image'
+import { FollowButton } from '@/components/follow/follow-button'
+import { FollowStats } from '@/components/follow/follow-stats'
+import { useWallet } from '@solana/wallet-adapter-react'
 
 // Inline getImageUrl function
 function getImageUrl(imageUrl: string | null): string {
@@ -32,6 +35,8 @@ interface BrandProfile {
   is_verified: boolean
   is_official_verified: boolean
   total_earned: number
+  followers_count: number
+  following_count: number
   created_at: string
 }
 
@@ -65,21 +70,37 @@ function getDisplayStatus(mission: Mission): { status: string; isExpired: boolea
 export default function BrandProfilePage() {
   const params = useParams()
   const brandId = params.id as string
+  const { publicKey } = useWallet()
   const [brand, setBrand] = useState<BrandProfile | null>(null)
   const [missions, setMissions] = useState<Mission[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   useEffect(() => {
     if (!brandId) return
     loadBrandProfile()
   }, [brandId])
 
+  useEffect(() => {
+    if (publicKey) {
+      loadCurrentUser()
+    }
+  }, [publicKey])
+
+  async function loadCurrentUser() {
+    const { data } = await (supabase.from('users') as any)
+      .select('id')
+      .eq('wallet_address', publicKey?.toBase58())
+      .single()
+    setCurrentUser(data)
+  }
+
   async function loadBrandProfile() {
     setLoading(true)
     try {
-      // Load brand info
+      // Load brand info with follow counts
       const { data: brandData } = await (supabase.from('users') as any)
-        .select('*')
+        .select('*, followers_count, following_count')
         .eq('id', brandId)
         .single()
       
@@ -145,7 +166,7 @@ export default function BrandProfilePage() {
           {/* Brand Header */}
           <div className="bg-brand-card border border-brand-border rounded-2xl p-8 mb-8">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-              {/* Brand Avatar - FIXED with getImageUrl */}
+              {/* Brand Avatar */}
               <div className="w-24 h-24 rounded-2xl border-2 border-brand-green flex items-center justify-center bg-gradient-to-br from-brand-green to-brand-purple text-brand-dark font-black text-4xl overflow-hidden flex-shrink-0">
                 {brand.logo_url || brand.avatar_url ? (
                   <Image 
@@ -184,11 +205,31 @@ export default function BrandProfilePage() {
                       Verified
                     </span>
                   )}
+                  
+                  {/* Follow Button - نیا */}
+                  {currentUser && currentUser.id !== brand.id && (
+                    <FollowButton 
+                      targetUserId={brand.id}
+                      currentUserId={currentUser.id}
+                      size="md"
+                      showCount={true}
+                      followerCount={brand.followers_count || 0}
+                    />
+                  )}
                 </div>
                 
                 <p className="text-brand-green font-mono text-sm mb-3">
                   {shortenAddress(brand.wallet_address, 8)}
                 </p>
+
+                {/* Follow Stats - نیا */}
+                <div className="mb-4">
+                  <FollowStats 
+                    followersCount={brand.followers_count || 0}
+                    followingCount={brand.following_count || 0}
+                    compact={true}
+                  />
+                </div>
 
                 {brand.bio && (
                   <p className="text-gray-400 max-w-2xl mb-4">{brand.bio}</p>
