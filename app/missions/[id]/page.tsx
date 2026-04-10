@@ -153,7 +153,7 @@ interface Comment {
   }
 }
 
-// Follow Button for Comments - نیا component
+// Follow Button for Comments
 function CommentFollowButton({ 
   targetUserId, 
   currentUserId 
@@ -264,7 +264,6 @@ export default function MissionDetailPage() {
     loadData()
   }, [id, publicKey])
 
-  // Load comments separately to avoid blocking main load
   useEffect(() => {
     if (submissions.length > 0) {
       loadComments(submissions.map((s: any) => s.id))
@@ -274,7 +273,6 @@ export default function MissionDetailPage() {
   async function loadData() {
     setLoading(true)
     try {
-      // Load mission
       const { data: m, error: mError } = await (supabase.from('missions') as any)
         .select('*, brand:users(id, username, wallet_address, is_verified, is_official_verified, avatar_url, logo_url, followers_count, following_count)')
         .eq('id', id)
@@ -283,7 +281,6 @@ export default function MissionDetailPage() {
       if (mError) throw mError
       setMission(m)
       
-      // Load submissions with engagement
       const { data: subs, error: sError } = await (supabase
         .from('submissions') as any)
         .select(`*, creator:users(id, username, wallet_address, avatar_url), engagement:engagements(*)`)
@@ -294,11 +291,8 @@ export default function MissionDetailPage() {
       
       const submissionsData = subs || []
       setSubmissions(submissionsData)
-      
-      // Set top 3 creators for sidebar
       setTopCreators(submissionsData.slice(0, 3))
       
-      // Check user submission status
       if (publicKey) {
         const { data: u, error: uError } = await (supabase.from('users') as any)
           .select('*')
@@ -312,20 +306,17 @@ export default function MissionDetailPage() {
         if (u) {
           setCurrentUser(u)
           
-          // FIXED: Properly check if user has submitted
           const { data: mine, error: mineError } = await (supabase.from('submissions') as any)
             .select('id, status')
             .eq('mission_id', id)
             .eq('creator_id', u.id)
           
-          // Only set hasSubmitted if we actually got data back
           if (mine && mine.length > 0) {
             setHasSubmitted(true)
           } else {
             setHasSubmitted(false)
           }
           
-          // Load user engagements
           const { data: engagements, error: eError } = await (supabase.from('user_engagements') as any)
             .select('submission_id, action_type')
             .eq('user_id', u.id)
@@ -344,7 +335,6 @@ export default function MissionDetailPage() {
           setUserEngagements({})
         }
       } else {
-        // No wallet connected
         setCurrentUser(null)
         setHasSubmitted(false)
         setUserEngagements({})
@@ -359,8 +349,6 @@ export default function MissionDetailPage() {
 
   async function loadComments(submissionIds: string[]) {
     if (!submissionIds.length) return
-    
-    console.log('Loading comments for submissions:', submissionIds)
     
     try {
       const { data: commentsData, error } = await (supabase
@@ -377,9 +365,6 @@ export default function MissionDetailPage() {
         return
       }
       
-      console.log('Comments loaded:', commentsData?.length || 0)
-      
-      // Group comments by submission_id
       const grouped: Record<string, Comment[]> = {}
       commentsData?.forEach((comment: Comment) => {
         if (!grouped[comment.submission_id]) grouped[comment.submission_id] = []
@@ -396,7 +381,6 @@ export default function MissionDetailPage() {
     return (likes * SCORE_WEIGHTS.likes) + (comments * SCORE_WEIGHTS.comments) + (shares * SCORE_WEIGHTS.shares)
   }
 
-  // FIXED: Prevent page reload by using proper event handling
   const handleEngagement = useCallback(async (submissionId: string, actionType: 'like' | 'comment' | 'share', metadata?: any) => {
     if (!currentUser) {
       toast.error('Connect wallet first')
@@ -408,7 +392,6 @@ export default function MissionDetailPage() {
       return
     }
 
-    // Prevent double submission
     setSubmitting(prev => ({ ...prev, [submissionId + actionType]: true }))
 
     try {
@@ -426,7 +409,6 @@ export default function MissionDetailPage() {
 
       if (insertError) throw insertError
 
-      // Update engagement counts locally first (optimistic update)
       const submission = submissions.find(s => s.id === submissionId)
       if (submission) {
         const currentEngagement = submission.engagement || { likes: 0, comments: 0, shares: 0, id: null }
@@ -441,7 +423,6 @@ export default function MissionDetailPage() {
         const newShares = updates.shares ?? currentEngagement.shares
         const newScore = calculateCreatorScore(newLikes, newComments, newShares)
         
-        // Update local state immediately
         setSubmissions(prev => prev.map(s => {
           if (s.id === submissionId) {
             return {
@@ -457,7 +438,6 @@ export default function MissionDetailPage() {
           return s
         }))
 
-        // Update in background
         if (currentEngagement.id) {
           await (supabase.from('engagements') as any)
             .update({ ...updates, score: newScore, updated_at: new Date().toISOString() })
@@ -473,7 +453,6 @@ export default function MissionDetailPage() {
             .select()
             .single()
           
-          // Update local state with new engagement ID
           if (newEng) {
             setSubmissions(prev => prev.map(s => {
               if (s.id === submissionId) {
@@ -494,7 +473,6 @@ export default function MissionDetailPage() {
         [submissionId]: [...(prev[submissionId] || []), actionType]
       }))
 
-      // Update user points
       await (supabase.from('users') as any)
         .update({ total_points: (currentUser.total_points || 0) + points })
         .eq('id', currentUser.id)
@@ -503,7 +481,6 @@ export default function MissionDetailPage() {
     } catch (e: any) {
       console.error('Engagement error:', e)
       toast.error(e.message || 'Failed to record engagement')
-      // Reload to sync state
       loadData()
     } finally {
       setSubmitting(prev => ({ ...prev, [submissionId + actionType]: false }))
@@ -531,13 +508,6 @@ export default function MissionDetailPage() {
     setSubmitting(prev => ({ ...prev, [commentModal.submissionId + 'comment']: true }))
     
     try {
-      console.log('Saving comment:', {
-        submission_id: commentModal.submissionId,
-        user_id: currentUser.id,
-        text: commentText.trim()
-      })
-      
-      // Save comment to database
       const { data: commentData, error: commentError } = await (supabase.from('comments') as any)
         .insert({
           submission_id: commentModal.submissionId,
@@ -547,17 +517,9 @@ export default function MissionDetailPage() {
         })
         .select()
       
-      if (commentError) {
-        console.error('Comment save error details:', commentError)
-        throw new Error(commentError.message || 'Failed to save comment')
-      }
+      if (commentError) throw new Error(commentError.message || 'Failed to save comment')
       
-      console.log('Comment saved:', commentData)
-      
-      // Reload comments for this submission
       await loadComments([commentModal.submissionId])
-      
-      // Now record the engagement
       await handleEngagement(commentModal.submissionId, 'comment', { text: commentText.trim() })
       
       setCommentModal({ open: false, submissionId: null })
@@ -610,7 +572,6 @@ export default function MissionDetailPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-gray-100 relative overflow-hidden">
-      {/* Background Effects */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
@@ -622,10 +583,8 @@ export default function MissionDetailPage() {
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            {/* Left Column */}
             <div className="lg:col-span-2 space-y-6">
               
-              {/* Mission Card */}
               <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/30 transition-all">
                 {mission.image_url && (
                   <div className="mb-4 h-48 rounded-xl overflow-hidden bg-slate-950 relative group">
@@ -643,7 +602,6 @@ export default function MissionDetailPage() {
                   </div>
                 )}
                 
-                {/* Brand Header with Follow Button - نیا */}
                 <div className="flex items-center justify-between mb-4">
                   <Link 
                     href={`/brand/${mission.brand?.id}`}
@@ -686,7 +644,6 @@ export default function MissionDetailPage() {
                     <ExternalLink size={16} className="text-gray-500 group-hover:text-emerald-400 transition-colors" />
                   </Link>
                   
-                  {/* Brand Follow Button - نیا */}
                   {currentUser && currentUser.id !== mission.brand?.id && (
                     <CommentFollowButton 
                       targetUserId={mission.brand?.id}
@@ -723,7 +680,6 @@ export default function MissionDetailPage() {
                 )}
               </div>
 
-              {/* Leaderboard Link */}
               <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-4 hover:border-emerald-500/30 transition-all group">
                 <Link 
                   href={`/missions/${id}/leaderboard`}
@@ -744,16 +700,22 @@ export default function MissionDetailPage() {
                 </Link>
               </div>
 
-              {/* Submissions Section */}
+              {/* ============================================ */}
+              {/* ✅ SUBMISSIONS - اب سب دکھیں گے (slice ہٹا دیا) */}
+              {/* ============================================ */}
               {submissions.length > 0 && (
                 <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/20 transition-all">
                   <h2 className="text-white font-bold mb-6 flex items-center gap-2 text-xl">
                     <Trophy size={20} className="text-yellow-400" /> 
                     Top Submissions
+                    <span className="ml-2 text-xs bg-slate-800 text-gray-400 px-2 py-1 rounded-full">
+                      {submissions.length} total
+                    </span>
                   </h2>
                   
                   <div className="space-y-6">
-                    {submissions.slice(0, 10).map((sub, i) => {
+                    {/* ✅ .slice(0, 10) ہٹا دیا - اب سب submissions دکھیں گے */}
+                    {submissions.map((sub, i) => {
                       const userActions = userEngagements[sub.id] || []
                       const hasLiked = userActions.includes('like')
                       const hasCommented = userActions.includes('comment')
@@ -762,7 +724,6 @@ export default function MissionDetailPage() {
                       
                       return (
                         <div key={sub.id} className="bg-slate-950/50 rounded-2xl border border-slate-800 overflow-hidden hover:border-slate-700 transition-all">
-                          {/* Submission Header */}
                           <div className="p-4 border-b border-slate-800">
                             <div className="flex items-center justify-between mb-3">
                               <Link href={`/creator/${sub.creator?.id}`} className="flex items-center gap-3 group/creator">
@@ -790,7 +751,6 @@ export default function MissionDetailPage() {
                               </div>
                             </div>
 
-                            {/* Content Link */}
                             <a 
                               href={sub.content_link} 
                               target="_blank" 
@@ -803,7 +763,6 @@ export default function MissionDetailPage() {
                             </a>
                           </div>
 
-                          {/* Engagement Stats */}
                           <div className="px-4 py-3 bg-slate-900/30 flex items-center justify-between">
                             <div className="flex items-center gap-6 text-sm">
                               <span className="flex items-center gap-2 text-gray-400">
@@ -888,7 +847,6 @@ export default function MissionDetailPage() {
                             )}
                           </div>
 
-                          {/* Comments Section with Follow Button - نیا */}
                           {submissionComments.length > 0 && (
                             <div className="px-4 py-3 bg-slate-950/30 border-t border-slate-800">
                               <h4 className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider">Comments</h4>
@@ -920,7 +878,6 @@ export default function MissionDetailPage() {
                                             </span>
                                           </Link>
                                           
-                                          {/* Follow Button for Commenter - نیا */}
                                           <CommentFollowButton 
                                             targetUserId={comment.user_id}
                                             currentUserId={currentUser?.id || null}
@@ -951,10 +908,8 @@ export default function MissionDetailPage() {
               )}
             </div>
 
-            {/* Right Column - Sidebar */}
             <div className="space-y-6">
               
-              {/* Mission Stats */}
               <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-6 space-y-4 hover:border-emerald-500/20 transition-all">
                 <div className="flex items-center justify-between py-3 border-b border-slate-800">
                   <span className="text-gray-400 text-sm">Reward Pool</span>
@@ -982,7 +937,6 @@ export default function MissionDetailPage() {
                 </div>
               </div>
 
-              {/* Submit Entry - FIXED */}
               <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/20 transition-all">
                 <h2 className="text-white font-bold mb-4 flex items-center gap-2">
                   <CheckCircle size={18} className="text-emerald-400" />
@@ -1011,7 +965,6 @@ export default function MissionDetailPage() {
                 )}
               </div>
 
-              {/* Top 3 Creators */}
               {topCreators.length > 0 && (
                 <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/20 transition-all">
                   <div className="flex items-center justify-between mb-4">
@@ -1035,7 +988,6 @@ export default function MissionDetailPage() {
                 </div>
               )}
 
-              {/* Share Mission */}
               <div className="bg-slate-900/70 backdrop-blur-md border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/20 transition-all">
                 <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Share Mission</h3>
                 <div className="flex gap-3">
@@ -1056,7 +1008,6 @@ export default function MissionDetailPage() {
         </div>
       </main>
 
-      {/* Comment Modal */}
       {commentModal.open && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
