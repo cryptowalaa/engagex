@@ -5,9 +5,11 @@ import { Navbar } from '@/components/layout/navbar'
 import { Sidebar } from '@/components/layout/sidebar'
 import { useUser } from '@/hooks/use-user'
 import { shortenAddress } from '@/lib/utils/helpers'
-import { User, Save, ImageIcon, Link as LinkIcon } from 'lucide-react'
+import { User, Save, ImageIcon, Link as LinkIcon, Share2, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Image from 'next/image'
+import { ProfileShareCard } from '@/components/profile/profile-share-card'
+import { useProfileStats } from '@/hooks/use-profile-stats'
 
 const INPUT = "w-full bg-brand-dark border border-brand-border rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-green/50"
 
@@ -18,8 +20,10 @@ export default function ProfilePage() {
   const [twitter, setTwitter] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const [showShareCard, setShowShareCard] = useState(false)
+  
+  const { stats } = useProfileStats(user?.id || null)
 
-  // Load current values when user data arrives
   useEffect(() => {
     if (user) {
       setUsername(user.username || '')
@@ -48,15 +52,34 @@ export default function ProfilePage() {
     finally { setSaving(false) }
   }
 
+  const shareCardUser = user ? {
+    ...user,
+    ...stats,
+    submissions_count: stats.submissions_count
+  } : null
+
   return (
     <div className="min-h-screen bg-brand-dark">
       <Navbar />
       <div className="flex pt-16">
         <Sidebar />
         <main className="flex-1 p-6 lg:p-8">
-          <h1 className="text-3xl font-black mb-8">My <span className="text-brand-green">Profile</span></h1>
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-3xl font-black">My <span className="text-brand-green">Profile</span></h1>
+            
+            {user && (
+              <button
+                onClick={() => setShowShareCard(true)}
+                className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#00FFE0]/20 via-[#00FFE0]/10 to-[#FF2E63]/20 border border-[#00FFE0]/50 text-[#00FFE0] font-bold rounded-xl overflow-hidden transition-all hover:shadow-lg hover:shadow-[#00FFE0]/20"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-[#00FFE0]/20 to-[#FF2E63]/20 translate-x-[-100%] group-hover:translate-x-0 transition-transform" />
+                <Sparkles size={18} className="relative z-10" />
+                <span className="relative z-10">Share Profile</span>
+              </button>
+            )}
+          </div>
+          
           <div className="max-w-2xl space-y-6">
-            {/* Profile Header with Avatar Preview */}
             <div className="bg-brand-card border border-brand-border rounded-2xl p-6 flex items-center gap-5">
               <div className="w-20 h-20 rounded-full border-2 border-brand-green flex items-center justify-center bg-gradient-to-br from-brand-green to-brand-purple text-brand-dark font-black text-3xl flex-shrink-0 overflow-hidden">
                 {avatarUrl ? (
@@ -86,7 +109,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-2 gap-4">
               {[['Total Earned', `${user?.total_earned || 0} USDC`, 'text-brand-green'], ['Total Points', `${user?.total_points || 0} pts`, 'text-brand-purple'], ['Role', user?.role || '—', 'text-yellow-400'], ['Referral Code', user?.referral_code || '—', 'text-blue-400']].map(([label, val, col]) => (
                 <div key={label} className="bg-brand-card border border-brand-border rounded-2xl p-4 text-center">
@@ -96,11 +118,9 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            {/* Edit Form */}
             <div className="bg-brand-card border border-brand-border rounded-2xl p-6 space-y-5">
               <h2 className="font-bold text-lg">Edit Profile</h2>
               
-              {/* Avatar URL Input - NEW */}
               <div>
                 <label className="text-sm text-gray-400 font-semibold block mb-2 flex items-center gap-2">
                   <ImageIcon size={14} /> Profile Avatar URL
@@ -116,7 +136,6 @@ export default function ProfilePage() {
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Paste image URL (Imgur, Cloudinary, etc.)</p>
                 
-                {/* Preview */}
                 {avatarUrl && (
                   <div className="mt-3 flex items-center gap-3">
                     <span className="text-xs text-gray-400">Preview:</span>
@@ -160,6 +179,13 @@ export default function ProfilePage() {
           </div>
         </main>
       </div>
+
+      <ProfileShareCard 
+        user={shareCardUser}
+        isOpen={showShareCard}
+        onClose={() => setShowShareCard(false)}
+        type={user?.role === 'brand' ? 'brand' : 'creator'}
+      />
     </div>
   )
 }
