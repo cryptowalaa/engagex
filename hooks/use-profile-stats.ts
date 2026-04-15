@@ -28,7 +28,8 @@ export function useProfileStats(userId: string | null) {
         const rank = leaderboard?.findIndex((u: any) => u.id === userId) + 1 || 1
 
         let badge = 'Creator'
-        if (rank === 1) badge = '🏆 Top Creator'
+        if (rank === 1) badge = '🏆 OG Creator'
+        else if (rank <= 3) badge = '👑 Top Creator'
         else if (rank <= 10) badge = '⭐ Rising Star'
         else if ((submissionsCount || 0) > 50) badge = '🎯 Power User'
         else if ((submissionsCount || 0) > 10) badge = '🚀 Active'
